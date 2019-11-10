@@ -1,16 +1,25 @@
-let num_nodes = 200; // How many nodes
+let num_nodes = 400; // How many nodes
+let graph;
 let nodes = [];
 let links = [];
 let spread_prob; // Probability of spreading infection
-let max_infected = 1000; // Limit number of infected agents to avoid killing my computer
-let cur_infected = 0; // How many infected agents are travelling
-let buffer = 50; // Leave some space around the network
+let buffer = 70; // Leave some space around the network
 let ID = 0; // Used to map nodes to rows of the adjacency matrix
 let adj; // Adjacency matrix
 let node_diameter = 10; // How big should the nodes be?
-let slider;
 let focused = true;
 let locality = 100;
+let window_size = 1000;
+let attraction = 1;
+let repulsion = 1;
+// Palette
+let spikeColor;
+let restColor;
+
+// Interface
+let slider;
+let max_signals = 10000; // Limit number of infected agents to avoid killing my computer
+let cur_infected = 0; // How many infected agents are travelling
 
 function mousePressed() {
     for (let node of nodes) {
@@ -19,23 +28,6 @@ function mousePressed() {
             node.infect(true);
         }
     }
-}
-
-let filter = 0;
-let rate = 5; // wheel events are REALLY fast, filter some of them
-function mouseWheel(event) {
-    //print(event.delta);
-    filter = (filter + 1) % rate;
-    if (filter == 0) {
-        for (let node of nodes) {
-            let d = dist(mouseX, mouseY, node.pos.x, node.pos.y);
-            if (d < 10) {
-                node.infect(true);
-            }
-        }
-    }
-
-    return false; // return false otherwise the page would scroll
 }
 
 function makeNodes() {
@@ -86,9 +78,43 @@ function localWire() {
         links.push(link);
     }
 }
-let graph;
+
+function rewire() {
+    let to_cut = [];
+    let to_add = [];
+    let to_keep = [];
+
+    for (let edge of links) {
+        let len = p5.Vector.dist(edge.from.pos, edge.to.pos);
+        if (len > locality) {
+            to_cut.push(edge);
+        } else {
+            to_keep.push(edge);
+        }
+    }
+}
+
 function setup() {
+    spikeColor = color(255, 0, 50);
+    restColor = color(0, 65, 225);
     let cnv = createCanvas(1200, 800);
+    let reset = createButton('reset');
+    reset.mousePressed(() => {
+        cur_infected = 0;
+        makeNodes();
+        localWire();
+        plotNetwork();
+    });
+    reset.position(400, 5);
+    reset.style('width', '80px');
+    let spark = createButton('spark');
+    spark.mousePressed(() => {
+        for (let node of nodes) {
+            node.infect(true);
+        }
+    });
+    spark.position(500, 5);
+    spark.style('width', '80px');
     graph = createGraphics(width, height);
 
     slider = createSlider(0, 100, 50, 1); // range[0-100] start from 55, increments of 5
@@ -97,9 +123,9 @@ function setup() {
 
     makeNodes();
     localWire();
-    plot();
+    plotNetwork();
 }
-function plot() {
+function plotNetwork() {
     graph.clear();
     for (let link of links) {
         link.show(graph);
@@ -130,6 +156,9 @@ function draw() {
 
     for (let node of nodes) {
         node.animate();
+    }
+
+    for (let node of nodes) {
         node.update();
     }
 
@@ -152,28 +181,50 @@ class Node {
         this.threshold = 2;
         this.base_threshold = 4;
         this.activity = 0;
+        this.spike_time = 0;
     }
     // force is used so that clicking bypasses the infection probability
     infect(force) {
         this.activity += 1;
         if (force || this.activity > this.threshold) {
-            this.activity = 0;
+            this.spike_time = new Date().getTime();
+            this.activity = -this.threshold;
             if (!force) {
                 this.threshold += 1;
             }
             for (let edge of this.out) {
                 // if we have not reached the max amount of carriers add a new one
-                if (cur_infected < max_infected) {
+                if (cur_infected < max_signals) {
                     edge.infect();
                     cur_infected += 1;
                 }
             }
+
+            // for (let edge of this.in) {
+            //     if (abs(this.spike_time - edge.from.spike_time) < window_size) {
+            //         if (
+            //             p5.Vector.dist(this.pos, edge.from.pos) >
+            //             node_diameter * 2
+            //         ) {
+            //             let dir = p5.Vector.sub(edge.from.pos, this.pos);
+            //             dir.setMag(attraction);
+            //             this.pos.add(dir);
+            //         }
+            //     } else {
+            //         let dir = p5.Vector.sub(this.pos, edge.from.pos);
+            //         dir.setMag(repulsion);
+            //         this.pos.add(dir);
+            //     }
+            // }
         }
     }
 
     update() {
         if (this.threshold > this.base_threshold) {
             this.threshold -= 0.1;
+        }
+        if (this.activity > 0) {
+            this.activity -= 0.005;
         }
     }
 
@@ -184,12 +235,22 @@ class Node {
     }
     animate() {
         noStroke();
-        fill(0, 150, 10);
-        ellipse(this.pos.x, this.pos.y, this.activity * 5);
+        if (this.activity > 0) {
+            let col = lerpColor(
+                restColor,
+                spikeColor,
+                this.activity / this.threshold,
+            );
+            fill(col);
+            ellipse(this.pos.x, this.pos.y, node_diameter + this.activity * 5);
+        } else {
+            fill(restColor);
+            ellipse(this.pos.x, this.pos.y, node_diameter);
+        }
         noFill();
-        stroke(200, 50, 50);
+        stroke(100);
         strokeWeight(1);
-        ellipse(this.pos.x, this.pos.y, this.threshold * 5);
+        ellipse(this.pos.x, this.pos.y, node_diameter + this.threshold * 5);
     }
 }
 
@@ -235,7 +296,7 @@ class Link {
         }
 
         p.line(this.from.pos.x, this.from.pos.y, this.to.pos.x, this.to.pos.y);
-        arrowhead(this.from, this.to, 4, 10, node_diameter, p);
+        arrowhead(this.from, this.to, 2, 6, node_diameter, p);
     }
 
     animate() {
@@ -248,9 +309,9 @@ class Link {
             noStroke();
             fill(255);
             ellipse(tmp.x, tmp.y, 5, 5);
-            noFill();
-            stroke(0, 30);
-            ellipse(this.from.pos.x, this.from.pos.y, carrier * 2, carrier * 2);
+            // noFill();
+            // stroke(0, 30);
+            // ellipse(this.from.pos.x, this.from.pos.y, carrier * 2, carrier * 2);
         }
     }
 
