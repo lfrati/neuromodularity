@@ -20,9 +20,10 @@ let plots;
 let plot_links = [];
 let plot_comps = [];
 let components;
+let clicked = false;
 
 function ui() {
-    let cnv = createCanvas(400, 600);
+    let cnv = createCanvas(400, 400);
 
     cnv.mousePressed(() => {
         makeNodes();
@@ -44,13 +45,19 @@ function makeNodes() {
 
     for (let i = 0; i < num_nodes; i++) {
         let x = buffer + random(width - buffer * 2);
-        let y = buffer + random(height - 250);
+        let y = buffer + random(height - buffer * 3);
         let pos = createVector(x, y);
         nodes.push(new Node(pos, ID));
         ID += 1;
     }
 }
+
+function mousePressed() {
+    clicked = true;
+}
+
 function setup() {
+    textAlign(CENTER);
     ui();
     makeNodes();
     localWire();
@@ -82,6 +89,12 @@ function localWire() {
 function draw() {
     background(50);
 
+    if (clicked == false) {
+        fill(255, 30);
+        noStroke();
+        textSize(40);
+        text('CLICK ME', width / 2, (height * 2) / 3);
+    }
     for (let link of links) {
         link.show();
     }
@@ -94,84 +107,21 @@ function draw() {
         ellipse(node.pos.x, node.pos.y, locality * 2);
     }
 
-    if (t < 1) {
-        locality = t * width;
-        t += dt;
-        localWire();
+    localWire();
 
-        components = [];
-        for (let node of nodes) {
-            if (node.visited == false) {
-                components.push(node.id);
-                visit(node);
-            }
-        }
+    stroke(200, 80);
+    strokeWeight(3);
+    line(0, height - 20, width, height - 20);
+    locality = constrain(mouseX, 0, height - 10);
+    fill(200);
+    noStroke();
+    ellipse(locality, height - 20, 10);
+    locality = map(locality, 0, height - 10, 0, (height * 2) / 3);
 
-        let progress = map(locality, 0, width, 0, 1);
-        // progress line
-        stroke(200);
-        line(progress * width, height - 10, progress * width - 1, height - 110);
-
-        let comps = (components.length / num_nodes) * 100;
-        let linkage = (links.length / max_links) * 100;
-        plot_links.push({x: width * progress - 1, y: height - 10 - comps});
-        plot_comps.push({x: width * progress - 1, y: height - 10 - linkage});
-
-        // top,mid,bot lines
-        stroke(255, 50);
-        line(0, height - 10, width, height - 10);
-        line(0, height - 60, width, height - 60);
-        line(0, height - 110, width, height - 110);
-
-        fill(120);
-        textSize(15);
-        noStroke();
-        text('          Nodes: ' + str(num_nodes), 10, height - 160);
-
-        noStroke();
-        fill(31, 106, 226);
-        textSize(15);
-        text(
-            'Components: ' + components.length + ' / ' + str(num_nodes),
-            10,
-            height - 120,
-        );
-
-        strokeWeight(2);
-        stroke(31, 106, 226);
-        noFill();
-        beginShape();
-        plot_links.forEach(point => {
-            vertex(point.x, point.y);
-        });
-        endShape();
-
-        fill(15, 198, 25);
-        noStroke();
-        textSize(15);
-        text(
-            '            Links: ' +
-                links.length +
-                ' / ' +
-                str(num_nodes * (num_nodes - 1)),
-            10,
-            height - 140,
-        );
-
-        strokeWeight(2);
-        stroke(15, 198, 25);
-        noFill();
-        beginShape();
-        plot_comps.forEach(point => {
-            vertex(point.x, point.y);
-        });
-        endShape();
-
-        image(plots, 0, 0);
-    } else {
-        makeNodes();
-        localWire();
-    }
+    textSize(22);
+    noStroke();
+    text('Local', 35, height - 30);
+    text('Global', width - 40, height - 30);
 }
 
 function visit(node) {
@@ -213,6 +163,7 @@ class Link {
     }
 
     show() {
+        stroke(250);
         strokeWeight(1);
         if (this.impulses.length == 0) {
             stroke(255, 30); // default is greyish
