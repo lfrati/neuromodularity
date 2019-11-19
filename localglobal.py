@@ -1,3 +1,4 @@
+import pickle
 import random
 import numpy as np 
 import pandas as pd
@@ -43,6 +44,43 @@ def create_subsets(size, scale = 1):
         
         return np.array(subsets)
 
+def save_network(network):
+    """
+    Saves the network as a pickled object with naming scheme related to 
+    network parameters.
+
+    Parameters:
+        :Network network:       The network object being saved.
+
+    Returns:
+        None.
+    """
+
+    size = str(network.L)
+    scale = str(network.scale)
+
+    filepath = "network_L" + size + "_S" + scale + ".pkl"
+
+    fout = open(filepath, 'wb')
+    pickle.dump(network, fout)
+    fout.close()
+
+def load_network(filepath):
+    """
+    Loads a network object from a given filepath.
+
+    Parameters:
+        :str filepath:      The filepath of the pickled object.
+
+    Returns:
+        :Network network:   The loaded network object.
+    """
+
+    fin = open(filepath, 'rb')
+    network = pickle.load(fin)
+
+    return network
+
 
 ### Main network object
 
@@ -64,7 +102,7 @@ class Network():
 
     """
 
-    def __init__(self, L = 10, scale = 1):
+    def __init__(self, L = 10, scale = 1, ):
         """
         Initializes the Network by creating the relevant dictionary mapping
         and adjacency list. 
@@ -115,7 +153,6 @@ class Network():
 
         Returns:
             None. Makes edits to adj. list.
-
         """
 
         # Find coordinates (row, column) of this node:
@@ -131,7 +168,7 @@ class Network():
                                   p = self.subsets[coords[1]])
 
         # Update adjlist
-        self.adjlist[node].update([(node, to) for to in self.L 
+        self.adjlist[node].update([to for to in self.L 
                               * to_row + to_col if node != to]) 
 
     def random_sample(self, node, samples):
@@ -153,7 +190,7 @@ class Network():
 
         edges = np.random.choice(points, size=samples)
         
-        self.adjlist[node].update([(node, to) for to in edges])
+        self.adjlist[node].update([to for to in edges])
 
     def hybrid_sample(self, node, samples, p):
         """
@@ -189,7 +226,7 @@ class Network():
         to_col = np.random.choice(local_points, p=self.subsets[col], size=_local)
 
         # reconstruct the node idx from rows and cols
-        local_edges = [(node, to) for to in self.L * to_row + to_col if node != to]
+        local_edges = [to for to in self.L * to_row + to_col if node != to]
 
         # Update adjlist.
         self.adjlist[node].update(local_edges)
@@ -206,12 +243,13 @@ class Network():
             None (prints a figure).
         """
         
+        # Build edges in networkx friendly format
         edges = []
-        for i in self.adjlist.values():
-            if (len(i) > 0):
-
-                # Fund edges in a networkx friendly format.
-                edges += list(i)
+        for i in self.adjlist.keys():
+            if (len(self.adjlist[i]) > 0):
+                for j in self.adjlist[i]:
+                    edges.append((i,j))
+                
 
         # Fix position mapping, because networkx is screwy.
         pos = {x:(self.mapping[x][1], self.L - self.mapping[x][0])
