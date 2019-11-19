@@ -44,9 +44,7 @@ def create_subsets(size, scale = 1):
         return np.array(subsets)
 
 
-
 ### Main network object
-
 
 
 class Network():
@@ -104,7 +102,7 @@ class Network():
             print("\n\n Subsets must be LxL in size. \n\n")
             raise
 
-    def sample_locally(self, node, samples):
+    def local_sample(self, node, samples):
         """
         Chooses [samples] number of nodes to generate an edge to (from [node])
         given an existing set of subsets.
@@ -157,9 +155,44 @@ class Network():
         
         self.adjlist[node].update([(node, to) for to in edges])
 
-    def hybrid_sample(self):
-        ### TODO: Implement this later.
-        pass
+    def hybrid_sample(self, node, samples, p):
+        """
+        Samples with Lapo's hybrid method from the jupyter notebook.
+
+        Mix of the previous two controlled by p -> fraction of local connections
+
+        Parameters:
+            :int node:          Node ID that we're sampling edges from.
+            :int samples:       Number of nodes to sample to.
+            :float p:           Fraction of local connections.
+
+        Returns:
+            None (Makes changes to adjlist)
+        """
+
+        assert 0 <= p and p <= 1
+        _local = int(p * samples)
+        _global = samples - _local
+
+        # global
+        global_points = np.hstack([np.arange(node), np.arange(node + 1, self.L ** 2)])
+        global_edges = np.random.choice(global_points, size=_global)
+        global_edges = [(node, to) for to in global_edges]
+
+        # local
+        col = node % self.L  # e.g. 11 % 5 -> col 1
+        row = node // self.L  # e.g. 11 // 5 -> row 2
+        local_points = np.arange(self.L)
+
+        # Find points
+        to_row = np.random.choice(local_points, p=self.subsets[row], size=_local)
+        to_col = np.random.choice(local_points, p=self.subsets[col], size=_local)
+
+        # reconstruct the node idx from rows and cols
+        local_edges = [(node, to) for to in self.L * to_row + to_col if node != to]
+
+        # Update adjlist.
+        self.adjlist[node].update(local_edges)
 
     def draw_grid(self, size=10, labels=False):
         """
@@ -203,7 +236,7 @@ network = Network(L=10, scale=1)
 # to it.
 
 network.mapping[25]
-network.sample_locally(25, 10)
+network.local_sample(25, 10)
 
 # Display with numbers 
 
