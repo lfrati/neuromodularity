@@ -6,6 +6,7 @@ import seaborn as sns
 import networkx as nx
 from scipy.stats import norm
 import matplotlib.pyplot as plt
+from collections import Counter
 
 ### Helper methods
 
@@ -80,6 +81,74 @@ def load_network(filepath):
     network = pickle.load(fin)
 
     return network
+
+def init_network_edges(init_edges,N,av_k,sample_type):
+    """
+    Adds edges to the initialised empty network.
+
+    Parameters:
+        :init_edges:          Number of edges to add in total.
+        :N:                   Number of nodes in the network.
+        :av_k:                Average degree.
+        :sample_type:         The type of sampling method we want to use.
+            
+
+    Returns:
+        None (adds edges to empty network).
+    """
+    n_edge = 0
+    while n_edge < init_edges:
+        from_node = np.random.choice(N)
+        new_edges = np.random.choice(av_k+1) #Could change this
+        if sample_type == "local":
+            network.local_sample(from_node, new_edges)
+        n_edge = n_edge + new_edges
+
+def let_them_go(activity_state, firing_nodes): 
+    """
+    Adds activity to nodes that are neighbors of firing nodes.
+    Firing nodes' activity goes down to 0.
+
+    Parameters:
+        :activity_state:          Array of activity state for each node.
+        :firing_nodes:            Set of nodes that reached the treshold.
+
+    Returns:
+        New activity state and nodes that fired (we need for fitness).
+    """
+    node_fired = []
+    for x in firing_nodes:
+        nodes_that_receive = []
+        nodes_that_receive.extend(network.adjlist.get(x))
+        activity_state[nodes_that_receive] += 20
+        activity_state[x] = 0
+        node_fired.append(x)
+    return activity_state, node_fired
+
+def network_fitness(network, activity_state):
+    """
+    Calculates a fitness score for a network.
+
+    Parameters:
+        :network:          Network to calculate score for.
+        :activity_state:   Array of activity state for each node.
+
+    Returns:
+        Fitness score.
+    """
+    node_fired_once = [] # list of nodes that fired
+    activity_state[list(range(N))] = th # make all nodes fire
+    firing_nodes = list(range(N))
+    while len(firing_nodes) > 0:
+        new_activity_state, node_fired = let_them_go(activity_state, firing_nodes)
+        node_fired_once.append(node_fired)
+        activity_state = new_activity_state
+        firing_nodes = np.where(activity_state >= th)[0]
+    if len(node_fired_once) == 1:
+        fitness = 0
+    else: 
+        fitness = len(Counter(node_fired_once[1]).keys())
+    return (fitness)
 
 
 ### Main network object
@@ -261,8 +330,41 @@ class Network():
         plt.figure(figsize=(16, 16))
         nx.draw(g, with_labels=labels, pos=pos, node_size=size)
         plt.show()
+        
 
+### Sample run
 
+#Parameters
+L = 20 #side of the grid
+N = L*L #number of nodes
+av_k = 5 #average degree in the beginning
+init_edges = N*av_k # number of edges in the initial network
+sample_type = "local"
+locality = 1
+th = 100 # minimum number of signals that initiate firing of node
+
+#Init network and activity_state
+network = Network(L, locality)
+init_network_edges(init_edges,N,av_k,sample_type)
+activity_state = np.zeros(N)
+
+#Test network
+fitness = network_fitness(network,activity_state)
+
+#Test how much stochasticity is in fitness (same network parameters -> similar fitness)
+fitnesses = []
+for a in range(100):
+    network = Network(L, locality)
+    init_network_edges(init_edges,N,av_k,sample_type)
+    activity_state = np.zeros(N)
+    fitness = network_fitness(network,activity_state)
+    fitnesses.append(fitness)
+    
+np.mean(fitnesses)
+np.std(fitnesses)
+plt.plot(fitnesses)
+        
+        
 """
 Sample call / use:
 
