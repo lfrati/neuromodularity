@@ -82,27 +82,47 @@ def load_network(filepath):
 
     return network
 
-def init_network_edges(init_edges,N,av_k,sample_type):
+def init_network_edges(N,av_k,sample_type):
     """
     Adds edges to the initialised empty network.
 
     Parameters:
-        :init_edges:          Number of edges to add in total.
         :N:                   Number of nodes in the network.
         :av_k:                Average degree.
         :sample_type:         The type of sampling method we want to use.
-            
 
     Returns:
         None (adds edges to empty network).
     """
-    n_edge = 0
-    while n_edge < init_edges:
-        from_node = np.random.choice(N)
-        new_edges = np.random.choice(av_k+1) #Could change this
+
+    for node in range(N):
+        new_edges = np.random.normal(loc=av_k, scale=1.0)
         if sample_type == "local":
-            network.local_sample(from_node, new_edges)
-        n_edge = n_edge + new_edges
+            network.local_sample(node, int(new_edges))
+            
+        
+def add_network_edges(num_grow,N,sample_type):
+    """
+    Adds edges to the network.
+
+    Parameters:
+        :num_grow:            Number of edges to add in total.
+        :N:                   Number of nodes in the network.
+        :sample_type:         The type of sampling method we want to use.
+            
+
+    Returns:
+        None (adds edges to network).
+    """
+    n_edge = 0
+    while n_edge < num_grow:
+        from_node = np.random.choice(N, num)
+        num_edges = sum(map(len, network.adjlist.values()))
+        if sample_type == "local":
+            network.local_sample(from_node, 1)
+        new_num_edges = sum(map(len, network.adjlist.values()))
+        dif = new_num_edges - num_edges # because there are no paralell edges but we still want the tot num of edges fixed
+        n_edge = n_edge + dif
 
 def let_them_go(activity_state, firing_nodes): 
     """
@@ -140,6 +160,7 @@ def network_fitness(network, activity_state):
     activity_state[list(range(N))] = th # make all nodes fire
     firing_nodes = list(range(N))
     while len(firing_nodes) > 0:
+        print("fired")
         new_activity_state, node_fired = let_them_go(activity_state, firing_nodes)
         node_fired_once.append(node_fired)
         activity_state = new_activity_state
@@ -351,19 +372,21 @@ activity_state = np.zeros(N)
 #Test network
 fitness = network_fitness(network,activity_state)
 
-#Test how much stochasticity is in fitness (same network parameters -> similar fitness)
-fitnesses = []
-for a in range(100):
-    network = Network(L, locality)
-    init_network_edges(init_edges,N,av_k,sample_type)
-    activity_state = np.zeros(N)
-    fitness = network_fitness(network,activity_state)
-    fitnesses.append(fitness)
-    
-np.mean(fitnesses)
-np.std(fitnesses)
-plt.plot(fitnesses)
-        
+#Test how fitness changes with locality
+all_fitness = []
+for i in np.arange(0.1, 10.0, 0.1):
+    print(i)
+    locality = i
+    fitnesses = []
+    for a in range(10):
+        network = Network(L, locality)
+        init_network_edges(N,av_k,sample_type)
+        activity_state = np.zeros(N)
+        fitness = network_fitness(network,activity_state)
+        fitnesses.append(fitness)
+    all_fitness.append(np.mean(fitnesses))
+
+plt.plot(all_fitness)
         
 """
 Sample call / use:
@@ -382,3 +405,5 @@ network.local_sample(25, 10)
 
 network.draw_grid(True, 10)
 """
+
+
