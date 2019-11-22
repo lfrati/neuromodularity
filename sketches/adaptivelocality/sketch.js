@@ -195,6 +195,7 @@ function setup() {
     makeNodes();
     localWire();
     plotNetwork();
+    rectMode(CORNERS);
 }
 function plotNetwork() {
     graph.clear();
@@ -220,13 +221,18 @@ function draw() {
     cur_locality = int(slider.value());
     stroke(0);
     strokeWeight(2);
-    fill(220, 220, 220);
+    noFill();
+    stroke('yellow');
+    strokeWeight(0.5);
+    ellipse(width - max_locality, height - max_locality, cur_locality * 2);
+    noStroke();
+    fill(255);
     textSize(20);
     text('r : ' + cur_locality, 20, 20);
     text(
-        'M : ' + num_edges,
-        width - max_locality - 250,
-        height - max_locality + 20,
+        'M : ' + links.length,
+        width - max_locality - 40,
+        height - max_locality + 10,
     );
     text('Signals : ' + cur_infected, 210, 20);
 
@@ -246,20 +252,8 @@ function draw() {
     if (activity_log.length > width) {
         activity_log.pop();
     }
-    noFill();
-    // indicator is between 0 and 1
-    let indicator = cur_infected / max_signals;
-    stroke(255 * indicator, (1 - indicator) * 255, 0);
-    beginShape();
-    for (let idx in activity_log) {
-        const level = activity_log[idx];
-        vertex(idx, height - (level / max_signals) * buffer * 1.5);
-    }
-    endShape();
-    stroke(255, 50);
-    line(0, height - 1, width, height - 1);
     if (cur_infected <= 0) {
-        slider.value(slider.value() + 5);
+        slider.value(slider.value() + 2);
         localWire();
         // probWire();
         plotNetwork();
@@ -272,19 +266,45 @@ function draw() {
         num_edges = int(num_edges);
         slider.value(min_locality);
     }
-    // for (let last_addition of last_additions) {
-    //     stroke('yellow');
-    //     strokeWeight(10);
-    //     line(
-    //         last_addition.from.pos.x,
-    //         last_addition.from.pos.y,
-    //         last_addition.to.pos.x,
-    //         last_addition.to.pos.y,
+
+    // Activity bars
+    let edge_activity = [];
+    for (let link of links) {
+        edge_activity.push(link.activity);
+    }
+    edge_activity.sort((a, b) => b - a);
+    let bar_width = width / edge_activity.length;
+    let max = edge_activity[0];
+    let counter = 3;
+
+    noStroke();
+    fill(255, 30);
+    // for (let bar_height of edge_activity) {
+    //     rect(
+    //         counter,
+    //         height - (bar_height / max) * buffer,
+    //         counter + bar_width,
+    //         height,
     //     );
+    //     counter += bar_width;
     // }
-    stroke(255, 255, 0);
-    strokeWeight(2);
-    ellipse(width - max_locality, height - max_locality, cur_locality * 2);
+    for (let bar_height of edge_activity) {
+        rect(counter, height - bar_height, counter + bar_width, height);
+        counter += bar_width;
+    }
+
+    // Signals plot
+    noFill();
+    let indicator = cur_infected / max_signals;
+    stroke(255 * indicator, (1 - indicator) * 255, 0);
+    beginShape();
+    for (let idx in activity_log) {
+        const level = activity_log[idx];
+        vertex(idx, height - (level / max_signals) * buffer * 1.5);
+    }
+    endShape();
+    stroke(255, 50);
+    line(0, height - 1, width, height - 1);
 }
 
 class Node {
