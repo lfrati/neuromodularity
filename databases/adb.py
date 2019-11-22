@@ -32,8 +32,8 @@ def binary_memory_mu(n = 100, seed_mu = 1, seed_dist = 1,  repeats = 3):
 	"""
 
 	# Declare parameters to be iterated
-	mus = np.arange(0, 1, .01)
-	durations = [1,2,3,4,5,6,7,8,9,10]
+	mus = np.arange(.1, .5, .001)
+	durations = [100,500,1000,1500,3000]
 
 	# Initialize some consistently used vals.
 	trainer = LeastSquaredErrorTrainer()
@@ -44,6 +44,7 @@ def binary_memory_mu(n = 100, seed_mu = 1, seed_dist = 1,  repeats = 3):
 
 	# For each potential mu
 	for mu in mus:
+		print("Evluating for mu", mu)
 
 		# Define relevant params:
 		net_pars = {'num_nodes': n,
@@ -61,6 +62,7 @@ def binary_memory_mu(n = 100, seed_mu = 1, seed_dist = 1,  repeats = 3):
 
 		# For each iteration:
 		for d in durations:
+			print("Evaluating for duration", d)
 
 			# For each potential duration..
 			avg = []
@@ -81,7 +83,11 @@ def binary_memory_mu(n = 100, seed_mu = 1, seed_dist = 1,  repeats = 3):
 					by_dimension=True)
 
 				# Generate discrete echo network
-				esn = DiscreteEchoStateNetwork(reservoir, input_weights=input_weights, initial_state=dist, neuron_type='tanh',
+				esn = DiscreteEchoStateNetwork(reservoir, 
+					input_weights=input_weights, 
+					initial_state=dist, 
+					neuron_type='sigmoid',
+					neuron_pars = {'a':1, 'b':1, 'c':1, 'd':0, 'e':10}, 
 					output_type='heaviside', 
 					output_neuron_pars={'shape': (task.output_dimensions, 1), 
 					'threshold': 0.0, 'newval': 1.0})
@@ -118,7 +124,7 @@ def bit_recall_mu(n = 100, seed_mu = 1, seed_dist = 1,  repeats = 3):
 	"""
 
 	# Declare parameters to be iterated
-	mus = np.arange(0, 1, .01)
+	mus = np.arange(0, 1, .001)
 	plengths = [1,2,3,4,5,6,7,8,9,10]
 
 	# Initialize some consistently used vals.
@@ -130,6 +136,7 @@ def bit_recall_mu(n = 100, seed_mu = 1, seed_dist = 1,  repeats = 3):
 
 	# For each potential mu
 	for mu in mus:
+		print("Evaluating for mu", mu)
 
 		# Define relevant params:
 		net_pars = {'num_nodes': n,
@@ -147,6 +154,7 @@ def bit_recall_mu(n = 100, seed_mu = 1, seed_dist = 1,  repeats = 3):
 
 		# For each iteration:
 		for p in plengths:
+			print("Evaluating for plength", p)
 
 			# For each potential duration..
 			avg = []
@@ -167,7 +175,11 @@ def bit_recall_mu(n = 100, seed_mu = 1, seed_dist = 1,  repeats = 3):
 					by_dimension=True)
 
 				# Generate discrete echo network
-				esn = DiscreteEchoStateNetwork(reservoir, input_weights=input_weights, initial_state=dist, neuron_type='tanh',
+				esn = DiscreteEchoStateNetwork(reservoir, 
+					input_weights=input_weights, 
+					initial_state=dist, 
+					neuron_type='sigmoid',
+					neuron_pars = {'a':1, 'b':1, 'c':1, 'd':0, 'e':10},
 					output_type='heaviside', 
 					output_neuron_pars={'shape': (task.output_dimensions, 1), 
 					'threshold': 0.0, 'newval': 1.0})
