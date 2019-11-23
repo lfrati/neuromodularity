@@ -93,7 +93,7 @@ class Network:
         self.adjM = np.zeros((N ** 2, N ** 2))
         self.adjL = defaultdict(set)
         self.nodes = np.arange(N ** 2)
-        self.backup = backup
+        self.is_backup = backup
         self.opts = opts
 
         if opts["distr"] == "gauss":
@@ -114,7 +114,7 @@ class Network:
     def add_edges(self, node, num_samples):
         num_samples = max(num_samples, self.N - 1 - len(self.backup.adjL[node]))
         samples = np.random.choice(
-            self.nodes, p=self.backup.weights[node], replace=False, size=num_samples
+            self.nodes, p=self.weights[node], replace=False, size=num_samples
         )
         for sample in samples:
             self.weights[node][sample] = 0
