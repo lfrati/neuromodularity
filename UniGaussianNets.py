@@ -1,19 +1,24 @@
-import numpy as np
-import random
-from collections import OrderedDict, defaultdict
-from collections import Counter
-from scipy.stats import norm
-import pandas as pd
-from copy import deepcopy
 import time
 import json
+import random
+from copy import deepcopy
+
+from collections import Counter
+from collections import OrderedDict, defaultdict
+from scipy.stats import norm
+
+import numpy as n
+import pandas as pd
+import networkx as nx
+
 
 # This import registers the 3D projection, but is otherwise unused.
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.pyplot as plt
 from matplotlib import cm
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
 
+### HELPER FUNCTIONS
 
 def node_to_idxs(node, N):
     return [node // N, node % N]
@@ -86,9 +91,23 @@ def show_3d_weights(weights, N):
 
     plt.show()
 
+### MAIN CLASS
 
 class Network:
     def __init__(self, N, opts, backup=False):
+        """
+        Initialization of network object.
+
+        Parameters:
+            :int N:         The side length of the network grid.
+            :dict options:  The dictionary of parameters.
+            :bool backup:   Whether or not to save the network as a backup.
+
+        Returns:
+            None. Constructor method.
+        """
+
+        # Define default attributes
         self.N = N
         self.adjM = np.zeros((N ** 2, N ** 2))
         self.adjL = defaultdict(set)
@@ -96,6 +115,7 @@ class Network:
         self.is_backup = backup
         self.opts = opts
 
+        # Define more default attributes
         if opts["distr"] == "gauss":
             self.distr = opts["distr"]
             self.locality = opts["locality"]
@@ -112,37 +132,73 @@ class Network:
             self.backup = Network(N, opts, backup=True)
 
     def add_edges(self, node, num_samples):
+        """
+        Adds a number of edges to a given node.
+
+        Parameters:
+            :int node:          The node that is being connected to (source)
+            :int num_samples:   The number of nodes to be connected to the source
+
+        Returns:
+            None. Changes adjL and adjM.
+        """
+
+        # Verify that it is possible to sample enough nodes.
         num_samples = max(num_samples, self.N - 1 - len(self.backup.adjL[node]))
+
+        # Find target nodes as sample.
         samples = np.random.choice(
             self.nodes, p=self.weights[node], replace=False, size=num_samples
         )
+
+        # Connect to source node
         for sample in samples:
             self.weights[node][sample] = 0
             self.adjM[node][sample] = 1
             self.adjL[node].add(sample)
 
+        # Set weights
         self.weights[node] /= self.weights[node].sum()
 
         return samples
 
     def undo(self):
+        """
+        Undo changes from previous action.
+        """
+
         self.adjM = np.copy(self.backup.adjM)
         self.adjL = deepcopy(self.backup.adjL)
         self.weights = np.copy(self.backup.weights)
 
     def commit(self):
+        """
+        Cement changes from previous action.
+        """
+
         self.backup.adjM = np.copy(self.adjM)
         self.backup.adjL = deepcopy(self.adjL)
         self.backup.weights = np.copy(self.weights)
 
     def show_adj(self):
+        """
+        Visualizes adjacency matrix.
+        """
+
         plt.figure(figsize=(10, 10))
         plt.imshow(self.adjM)
         plt.show()
 
     def serialize(self):
+        """
+        Saves the attributes of a given network.
+        """
+
+        # Find some init params.
         opts = deepcopy(self.opts)
         opts["N"] = self.N
+
+        # Dump them all into a JSON, save with date/time
         info = [json.dumps(opts)+"\n"]
         timestr = time.strftime("%Y-%m-%d_%H%M%S")
         name = timestr + "_" + "_".join(
