@@ -7,7 +7,7 @@ from collections import Counter
 from collections import OrderedDict, defaultdict
 from scipy.stats import norm
 
-import numpy as n
+import numpy as np
 import pandas as pd
 import networkx as nx
 
