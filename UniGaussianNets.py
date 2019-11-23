@@ -7,7 +7,7 @@ from collections import Counter
 from collections import OrderedDict, defaultdict
 from scipy.stats import norm
 
-import numpy as n
+import numpy as np
 import pandas as pd
 import networkx as nx
 
@@ -187,6 +187,45 @@ class Network:
 
         plt.figure(figsize=(10, 10))
         plt.imshow(self.adjM)
+        plt.show()
+
+    def show_grid(self, size, labels):
+        """
+        Visualizes whole network grid using networkx.
+
+        Params:
+            :int size:      The size of the nodes labels.
+            :bool labels:   Whether the nodes are or are not labelled.
+
+        Returns:
+            None. (prints a figure)
+        """
+
+        # Reformat edges for networkx friendly format.
+        edges = []
+        for i in self.adjL.keys():
+            if (len(self.adjL[i]) > 0):
+                for j in self.adjL[i]:
+                    edges.append((i,j))
+
+        # Create node mapping:
+        mapping = {}
+        for i in range(self.N):
+            for j in range(self.N):
+
+                # For each node ID, find coords and set empty adjlist.
+                mapping[(self.N * i) + j] = (i,j)
+
+        # Fix mapping to play nicer with networkx 
+        pos = {x:(mapping[x][1], self.N - mapping[x][0])
+              for x in mapping.keys()}
+
+        # Display figure
+        g = nx.DiGraph()
+        g.add_nodes_from(mapping.keys())
+        g.add_edges_from(edges)
+        plt.figure(figsize=(16, 16))
+        nx.draw(g, with_labels=labels, pos=pos, node_size=size)
         plt.show()
 
     def serialize(self):
