@@ -60,13 +60,13 @@ def evolve(parents, tstep, save):
 			}, ignore_index=True)
 
 		# Print some stats:
-		print("\n----------- TIMESTEP", tstep, "-----------\n")
+		avg_fit = np.average([i.fitness 
+			for i in parents.population])
 
-		print("Average fitness:", np.average([i.fitness 
-			for i in parents.population]))
+		avg_mut = np.average([i.muts 
+			for i in parents.population])
 
-		print("Average mutations:", np.average([i.muts 
-			for i in parents.population]))
+		print("--- Timestep:", tstep, "|", "Avg Fit:", avg_fit, "|", "Avg Mut:", avg_mut, "---", end='\r')
 
 		# Decrement
 		tstep -= 1
@@ -78,7 +78,10 @@ def evolve(parents, tstep, save):
 			pickle.dump(db, fout)
 
 opts = {"distr":"gauss", "locality":0.2} 
-parents = Population(popsize=10, indsize=30, opts=opts, threshold=100)
+parents = Population(popsize=13, indsize=50, opts=opts, threshold=100)
 parents.initialize(av_k=1, sample_type="local")
 
-evolve(parents, 10, True)
+evolve(parents, 100, True)
+
+# Clear print
+print("\n")
