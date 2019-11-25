@@ -94,14 +94,16 @@ def show_3d_weights(weights, N):
 ### MAIN CLASS
 
 class Network:
-    def __init__(self, N, opts, backup=False):
+    def __init__(self, 
+        N=5, 
+        opts={"distr":"gauss", "locality":0.2},
+        threshold = 100, ID = 0):
         """
         Initialization of network object.
 
         Parameters:
             :int N:         The side length of the network grid.
-            :dict options:  The dictionary of parameters.
-            :bool backup:   Whether or not to save the network as a backup.
+            :dict opts:     The dictionary of parameters.
 
         Returns:
             None. Constructor method.
@@ -109,11 +111,15 @@ class Network:
 
         # Define default attributes
         self.N = N
+        self.opts = opts
+        self.age = 0
+        self.muts = 0
         self.adjM = np.zeros((N ** 2, N ** 2))
         self.adjL = defaultdict(set)
         self.nodes = np.arange(N ** 2)
-        self.is_backup = backup
-        self.opts = opts
+        self.fitness = 0
+        self.threshold = threshold
+        self.activities = {x:0 for x in self.nodes}
 
         # Define more default attributes
         if opts["distr"] == "gauss":
@@ -128,9 +134,6 @@ class Network:
         else:
             raise RuntimeError("Distribution not implemented: " + opts["distr"])
 
-        if backup == False:
-            self.backup = Network(N, opts, backup=True)
-
     def add_edges(self, node, num_samples):
         """
         Adds a number of edges to a given node.
@@ -144,7 +147,7 @@ class Network:
         """
 
         # Verify that it is possible to sample enough nodes.
-        num_samples = max(num_samples, self.N - 1 - len(self.backup.adjL[node]))
+        num_samples = max(num_samples, self.N - 1 - len(self.adjL[node]))
 
         # Find target nodes as sample.
         samples = np.random.choice(
@@ -162,23 +165,89 @@ class Network:
 
         return samples
 
-    def undo(self):
+    def populate(self,av_k,sample_type):
         """
-        Undo changes from previous action.
+        Adds edges to the initialised empty network.
+
+        Parameters:
+            :N:                   Number of nodes in the network.
+            :av_k:                Average degree.
+            :sample_type:         The type of sampling method we want to use.
+
+        Returns:
+            None (adds edges to empty network).
         """
 
-        self.adjM = np.copy(self.backup.adjM)
-        self.adjL = deepcopy(self.backup.adjL)
-        self.weights = np.copy(self.backup.weights)
+        for node in range(self.N ** 2):
+            new_edges = np.random.normal(loc=av_k, scale=1.0)
+            if new_edges < 0:
+                new_edges = 0
 
-    def commit(self):
+            #if sample_type == "local": #check if this is needed
+            self.add_edges(node, int(new_edges))
+
+    def fire(self, firing_nodes): 
         """
-        Cement changes from previous action.
+        Adds activity to nodes that are neighbors of firing nodes.
+
+        Parameters:
+            :firing_nodes:            Set of nodes that reached the treshold.
+
+        Returns:
+            New activity state and nodes that fired (we need for fitness).
+        """
+        
+        # For each firing node
+        for x in firing_nodes:
+                nodes_that_receive = list(self.adjL.get(x))
+
+                # Find each of its neighbors:
+                for j in nodes_that_receive:
+                    self.activities[j] += 20
+
+    def mutate(self):
+        """
+        A simple wrapper for add_edges: It chooses a random node and 
+        performs a sample on it. Used in evolution.
+
+        Parameters:
+            None
+
+        Returns:
+            None
         """
 
-        self.backup.adjM = np.copy(self.adjM)
-        self.backup.adjL = deepcopy(self.adjL)
-        self.backup.weights = np.copy(self.weights)
+        # Add a single edge to a random node, increment age
+        node = random.randrange(0, self.N ** 2)
+        self.add_edges(node, 1)
+        self.muts += 1
+
+    def evaluate(self):
+        """
+        Calculates a fitness score for a network.
+            
+        Returns:
+            Fitness score of the network
+        """
+
+        ###
+        # Currently a WIP
+        ###
+        
+        # firing_nodes = list(range(self.N ** 2))
+        # max_iters = 1000
+        # iters = 0
+        # try:
+        #     while len(firing_nodes) > 0 and iters < max_iters:
+        #         new_activity_state = self.fire(firing_nodes)
+        #         activity_state = new_activity_state
+        #         firing_nodes = np.where(activity_state >= self.threshold)[0]
+        #         iters += 1
+        # except:
+        #     print("Error, there may not be any edges to fire.")
+        #     raise
+            
+        self.fitness = random.random()
 
     def show_adj(self):
         """
@@ -189,7 +258,7 @@ class Network:
         plt.imshow(self.adjM)
         plt.show()
 
-    def show_grid(self, size, labels):
+    def show_grid(self, size=10, labels=True):
         """
         Visualizes whole network grid using networkx.
 
