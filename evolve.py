@@ -41,6 +41,7 @@ def evolve(parents, tstep, save):
 
 			if (parents.population[i].fitness < children.population[i].fitness):
 				parents.population[i] = children.population[i]
+				print("replaced parent")
 
 			# Increase age by 1
 			parents.population[i].age += 1
@@ -79,10 +80,10 @@ def evolve(parents, tstep, save):
 			pickle.dump(db, fout)
 
 opts = {"distr":"gauss", "locality":0.2} 
-parents = Population(popsize=2, indsize=10, opts=opts, threshold=100)
-parents.initialize(av_k=1, sample_type="local")
+parents = Population(popsize=2, indsize=10, opts=opts, threshold=200)
+parents.initialize(av_k=1)
 
-evolve(parents, 10, True)
+evolve(parents, 1000, False)
 
 # Clear print
 print("\n")
