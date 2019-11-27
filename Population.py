@@ -32,13 +32,12 @@ class Population:
         self.population = [Network(indsize, opts, threshold) 
         for _ in range(popsize)]
 
-    def initialize(self, av_k, sample_type):
+    def initialize(self, av_k):
         """
         Fills empty networks in population with initial connections.
 
         Parameters:
             :int av_k:          Average degree of each node.
-            :str sample_type:   The sample type.
 
         Returns:
             None.
@@ -48,7 +47,7 @@ class Population:
         for i in self.population:
 
             # Initialize / populate them.
-            i.populate(av_k, sample_type)
+            i.populate(av_k)
 
     def mutate(self):
         """
