@@ -21,7 +21,7 @@ from matplotlib.ticker import LinearLocator, FormatStrFormatter
 
 ### HELPER FUNCTIONS
 
-def gauss(x, mean, scale): #values here were tweak for our fitness function
+def gauss(x, mean, scale): #values here were tweaked for our fitness function
     return (1 / (scale * math.sqrt(2 * math.pi)) * (math.e
      ** -(0.5 * (x - mean)**2 / scale**2))) -0.015
 
@@ -175,14 +175,13 @@ class Network:
 
         return samples
 
-    def populate(self,av_k,sample_type):
+    def populate(self,av_k):
         """
         Adds edges to the initialised empty network.
 
         Parameters:
             :N:                   Number of nodes in the network.
             :av_k:                Average degree.
-            :sample_type:         The type of sampling method we want to use.
 
         Returns:
             None (adds edges to empty network).
@@ -193,7 +192,6 @@ class Network:
             if new_edges < 0:
                 new_edges = 0
 
-            #if sample_type == "local": #check if this is needed
             self.add_edges(node, int(new_edges))
 
     def mutate(self):
@@ -256,19 +254,20 @@ class Network:
 
         # While there are still SOME fireworthy states:
         iters = 1000
-        while (iters > 0 and len(np.where(self.fireworthy == True)) != 0):
+        while iters > 0 and len(np.where(self.fireworthy == True)[0]) > 0:
             # Update activity states
             self.fire()
-
+            print("fired")
+            
             # Save all edges associated with fireworthy nodes
-            firing = np.where(self.fireworthy == True)[0]
+            firing = np.where(self.astates >= self.threshold)[0]
 
             # Find proportion of nodes that fire
             prop = (len(firing) / self.N ** 2)
-            props.append(gauss((prop * 100), 70, 15))
-
+            props.append(gauss((prop * 100), 70, 15)) #this is the fitness component for overall node activity
+            
             for i in firing:
-                edge = [(i,x) for x in self.adjL[i]]
+                edge = [(i,x) for x in self.adjL[i]] #this tracks edge activity
                 edges += edge
 
             # Reset firing states, keep those that are > threshold
@@ -289,15 +288,17 @@ class Network:
             idx += 1
         
         ### Find first component of fitness ###
-        fitness_comp_1 = (idx/num_edges)*100 
+        fitness_comp_1 = (idx/num_edges)*100 #this goes from 0 to 75
         ###                                 ###
-
+        print(fitness_comp_1)
+        
         ### Find second component of fitness ###
-        fitness_comp_2 = np.average(props) * 1000
+        fitness_comp_2 = ((np.average(props) * 1000) + 15)*2.68 #now this also goes from 0 to 75
         ###                                  ###
+        print(fitness_comp_2)
 
-        # Set fitness to average
-        self.fitness = np.average([fitness_comp_1, fitness_comp_2])
+        # Set fitness to SUM
+        self.fitness = np.sum([fitness_comp_1, fitness_comp_2])
 
     def show_adj(self):
         """
