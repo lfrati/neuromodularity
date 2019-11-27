@@ -1,11 +1,12 @@
 import time
+import math
 import json
 import random
 from copy import deepcopy
 
+from scipy.stats import norm
 from collections import Counter
 from collections import OrderedDict, defaultdict
-from scipy.stats import norm
 
 import numpy as np
 import pandas as pd
@@ -20,9 +21,16 @@ from matplotlib.ticker import LinearLocator, FormatStrFormatter
 
 ### HELPER FUNCTIONS
 
+def gauss(x, mean, scale): #values here were tweak for our fitness function
+    return (1 / (scale * math.sqrt(2 * math.pi)) * (math.e
+     ** -(0.5 * (x - mean)**2 / scale**2))) -0.015
+
+    y = np.linspace(1, 100, 100) 
+    x = gauss(y,70,15)
+    plt.plot(x)
+
 def node_to_idxs(node, N):
     return [node // N, node % N]
-
 
 def unzip(l):
     return list(zip(*l))
@@ -119,7 +127,9 @@ class Network:
         self.nodes = np.arange(N ** 2)
         self.fitness = 0
         self.threshold = threshold
-        self.activities = {x:0 for x in self.nodes}
+
+        self.astates  = np.zeros(N ** 2)
+        self.fireworthy = np.array([False] * (N ** 2))
 
         # Define more default attributes
         if opts["distr"] == "gauss":
@@ -186,25 +196,6 @@ class Network:
             #if sample_type == "local": #check if this is needed
             self.add_edges(node, int(new_edges))
 
-    def fire(self, firing_nodes): 
-        """
-        Adds activity to nodes that are neighbors of firing nodes.
-
-        Parameters:
-            :firing_nodes:            Set of nodes that reached the treshold.
-
-        Returns:
-            New activity state and nodes that fired (we need for fitness).
-        """
-        
-        # For each firing node
-        for x in firing_nodes:
-                nodes_that_receive = list(self.adjL.get(x))
-
-                # Find each of its neighbors:
-                for j in nodes_that_receive:
-                    self.activities[j] += 20
-
     def mutate(self):
         """
         A simple wrapper for add_edges: It chooses a random node and 
@@ -222,32 +213,91 @@ class Network:
         self.add_edges(node, 1)
         self.muts += 1
 
+    def fire(self): 
+        """
+        Fires every node in the graph.
+
+        Parameters:
+            None
+
+        Returns:
+            None
+        """ 
+
+        # For each item being fired
+        firing = np.where(self.fireworthy == True)[0]
+        for i in firing:
+
+            # Find all neighbors and increment activity state += 20
+            neigh = list(self.adjL[i])
+
+            if (len(neigh) > 0):
+                self.astates[neigh] += 20
+
     def evaluate(self):
         """
-        Calculates a fitness score for a network.
-            
+        Evaluates the performance of a network on two main pieces
+
+        Parameters:
+            None
+
         Returns:
-            Fitness score of the network
+            None
         """
 
-        ###
-        # Currently a WIP
-        ###
+        ### Find first fitness component: ###
+            # Making sure one edge does not dominate fire count
+
+        edges = []
+        props = []
+
+        # Set all states as firing
+        self.fireworthy = np.array([True] * (self.N ** 2))
+
+        # While there are still SOME fireworthy states:
+        iters = 1000
+        while (iters > 0 and len(np.where(self.fireworthy == True)) != 0):
+            # Update activity states
+            self.fire()
+
+            # Save all edges associated with fireworthy nodes
+            firing = np.where(self.fireworthy == True)[0]
+
+            # Find proportion of nodes that fire
+            prop = (len(firing) / self.N ** 2)
+            props.append(gauss((prop * 100), 70, 15))
+
+            for i in firing:
+                edge = [(i,x) for x in self.adjL[i]]
+                edges += edge
+
+            # Reset firing states, keep those that are > threshold
+            self.fireworthy = np.array([False] * (self.N ** 2))
+            self.fireworthy[np.where(self.astates >= self.threshold)] = True
+            self.astates = np.zeros(self.N ** 2)
+
+            iters -= 1
+
+        # Counting / comparison code. Consult Csenge for questions
+        ecount = sorted(Counter(map(tuple, edges)).values(), reverse=True)
+        num_edges = sum(map(len, self.adjL.values()))
+        T = sum(ecount)*0.75 
+        summ = 0
+        idx = 0
+        while summ <= T:
+            summ = summ + ecount[idx] 
+            idx += 1
         
-        # firing_nodes = list(range(self.N ** 2))
-        # max_iters = 1000
-        # iters = 0
-        # try:
-        #     while len(firing_nodes) > 0 and iters < max_iters:
-        #         new_activity_state = self.fire(firing_nodes)
-        #         activity_state = new_activity_state
-        #         firing_nodes = np.where(activity_state >= self.threshold)[0]
-        #         iters += 1
-        # except:
-        #     print("Error, there may not be any edges to fire.")
-        #     raise
-            
-        self.fitness = random.random()
+        ### Find first component of fitness ###
+        fitness_comp_1 = (idx/num_edges)*100 
+        ###                                 ###
+
+        ### Find second component of fitness ###
+        fitness_comp_2 = np.average(props) * 1000
+        ###                                  ###
+
+        # Set fitness to average
+        self.fitness = np.average([fitness_comp_1, fitness_comp_2])
 
     def show_adj(self):
         """
