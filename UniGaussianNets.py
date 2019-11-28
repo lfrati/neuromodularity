@@ -26,7 +26,7 @@ def gauss(x, mean, scale): #values here were tweaked for our fitness function
      ** -(0.5 * (x - mean)**2 / scale**2))) -0.015
 
     y = np.linspace(1, 100, 100) 
-    x = gauss(y,70,15)
+    x = gauss(y,70,20)
     plt.plot(x)
 
 def node_to_idxs(node, N):
@@ -174,6 +174,37 @@ class Network:
         self.weights[node] /= self.weights[node].sum()
 
         return samples
+    
+    def add_edges_unif(self, node, num_samples):
+        """
+        Adds a number of edges to a given node.
+
+        Parameters:
+            :int node:          The node that is being connected to (source)
+            :int num_samples:   The number of nodes to be connected to the source
+
+        Returns:
+            None. Changes adjL and adjM.
+        """
+
+        # Verify that it is possible to sample enough nodes.
+        num_samples = max(num_samples, self.N - 1 - len(self.adjL[node]))
+
+        # Find target nodes as sample.
+        samples = np.random.choice(
+            self.nodes, replace=False, size=num_samples
+        )
+
+        # Connect to source node
+        for sample in samples:
+            self.weights[node][sample] = 0
+            self.adjM[node][sample] = 1
+            self.adjL[node].add(sample)
+
+        # Set weights
+        self.weights[node] /= self.weights[node].sum()
+
+        return samples
 
     def populate(self,av_k):
         """
@@ -193,6 +224,25 @@ class Network:
                 new_edges = 0
 
             self.add_edges(node, int(new_edges))
+            
+    def populate_unif(self,av_k):
+        """
+        Adds edges to the initialised empty network.
+
+        Parameters:
+            :N:                   Number of nodes in the network.
+            :av_k:                Average degree.
+
+        Returns:
+            None (adds edges to empty network).
+        """
+
+        for node in range(self.N ** 2):
+            new_edges = np.random.normal(loc=av_k, scale=1.0)
+            if new_edges < 0:
+                new_edges = 0
+
+            self.add_edges_unif(node, int(new_edges))
 
     def mutate(self):
         """
@@ -277,23 +327,26 @@ class Network:
 
             iters -= 1
 
-        # Counting / comparison code. Consult Csenge for questions
-        ecount = sorted(Counter(map(tuple, edges)).values(), reverse=True)
         num_edges = sum(map(len, self.adjL.values()))
-        T = sum(ecount)*0.75 
-        summ = 0
-        idx = 0
-        while summ <= T:
-            summ = summ + ecount[idx] 
-            idx += 1
+        
+        if len(edges) > 0:
+            ecount = sorted(Counter(map(tuple, edges)).values(), reverse=True)
+            T = sum(ecount)*0.75 
+            summ = 0
+            idx = 0
+            while summ <= T:
+                summ = summ + ecount[idx] 
+                idx += 1
+        else:
+            idx = 0
         
         ### Find first component of fitness ###
-        fitness_comp_1 = (idx/num_edges)*100 #this goes from 0 to 75
+        fitness_comp_1 = ((idx/num_edges)*100)/2 #this goes from 0 to 75/2
         ###                                 ###
         print(fitness_comp_1)
         
         ### Find second component of fitness ###
-        fitness_comp_2 = ((np.average(props) * 1000) + 15)*2.68 #now this also goes from 0 to 75
+        fitness_comp_2 = ((np.average(props) * 1000) + 15)*4 #fitness 2 is more important, 0 to 80
         ###                                  ###
         print(fitness_comp_2)
 
