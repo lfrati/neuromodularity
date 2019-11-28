@@ -48,6 +48,23 @@ class Population:
 
             # Initialize / populate them.
             i.populate(av_k)
+            
+    def initialize_unif(self, av_k):
+        """
+        Fills empty networks in population with initial connections.
+
+        Parameters:
+            :int av_k:          Average degree of each node.
+
+        Returns:
+            None.
+        """
+
+        # For each individual
+        for i in self.population:
+
+            # Initialize / populate them.
+            i.populate_unif(av_k)
 
     def mutate(self):
         """
