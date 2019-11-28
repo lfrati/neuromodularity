@@ -289,7 +289,12 @@ function draw() {
     //     counter += bar_width;
     // }
     for (let bar_height of edge_activity) {
-        rect(counter, height - bar_height, counter + bar_width, height);
+        rect(
+            counter,
+            height - (bar_height / max) * buffer,
+            counter + bar_width,
+            height,
+        );
         counter += bar_width;
     }
 
