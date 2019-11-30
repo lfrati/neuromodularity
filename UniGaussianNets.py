@@ -20,7 +20,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
 
 ### HELPER FUNCTIONS
-def make_communities(community_side, communities_per_side):
+def make_communities(community_side, communities_per_side): #this is for creating communities but it is not used in this version of the code
     """
     Compute indexes for communities on a lattice
     e.g.
@@ -237,7 +237,7 @@ class Network:
 
         return samples
 
-    def add_edges_unif(self, node, num_samples):
+    def add_edges_unif(self, node, num_samples): #adding edges uniformly
         """
         Adds a number of edges to a given node.
 
@@ -253,16 +253,13 @@ class Network:
         num_samples = min(num_samples, self.N - 1 - len(self.adjL[node]))
 
         # Find target nodes as sample.
-        samples = np.random.choice(self.nodes, replace=False, size=num_samples)
+        availableNodes = list(set(self.nodes) - self.adjL[node])
+        samples = np.random.choice(availableNodes, replace=False, size=num_samples)
 
         # Connect to source node
         for sample in samples:
-            self.weights[node][sample] = 0
             self.adjM[node][sample] = 1
             self.adjL[node].add(sample)
-
-        # Set weights
-        self.weights[node] /= self.weights[node].sum()
 
         return samples
 
@@ -285,7 +282,7 @@ class Network:
 
             self.add_edges(node, int(new_edges))
 
-    def populate_unif(self, av_k):
+    def populate_unif(self, av_k): #initialise edges uniformly
         """
         Adds edges to the initialised empty network.
 
@@ -318,7 +315,7 @@ class Network:
 
         # Add a single edge to a random node, increment age
         node = random.randrange(0, self.N ** 2)
-        self.add_edges(node, 1)
+        self.add_edges(node, 1) #when growing edges uniformly use self.add_edges_unif()
         self.muts += 1
 
     def fire(self):

@@ -53,7 +53,7 @@ def evolve(parents, tstep, save):
             # Replace parent with children if superior:
             for i in range(len(parents.population)):
 
-                if (parents.population[i].fitness < children.population[i].fitness):
+                if (parents.population[i].fitness <= children.population[i].fitness): #also replaces parent when fitness is the same
                     parents.population[i] = children.population[i]
                     print("replaced parent")
 
@@ -99,7 +99,7 @@ def evolve(parents, tstep, save):
             with open('run' + timestr + ".pkl", 'wb') as fout:
                 pickle.dump(db, fout)
 
-opts = {"distr":"gauss", "locality":0.5} 
+opts = {"distr":"gauss", "locality":0.5} # locality above 0.5 and 0.5 is like using uniform distribution!
 parents = Population(popsize=100, indsize=10, opts=opts, threshold=200)
 parents.initialize(av_k=1) #start with uniform distribution but grow locally
 
