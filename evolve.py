@@ -53,7 +53,7 @@ def evolve(parents, tstep, save):
             # Replace parent with children if superior:
             for i in range(len(parents.population)):
 
-                if (parents.population[i].fitness < children.population[i].fitness):
+                if (parents.population[i].fitness <= children.population[i].fitness):
                     parents.population[i] = children.population[i]
                     print("replaced parent")
 
@@ -99,11 +99,18 @@ def evolve(parents, tstep, save):
             with open('run' + timestr + ".pkl", 'wb') as fout:
                 pickle.dump(db, fout)
 
-opts = {"distr":"gauss", "locality":0.5} 
-parents = Population(popsize=100, indsize=10, opts=opts, threshold=200)
-parents.initialize(av_k=1) #start with uniform distribution but grow locally
+opts = {"distr":"gauss", "locality":0.3} 
+parents = Population(popsize=1, indsize=9, opts=opts, threshold=140)
+tot_num_edge = (9*(9-1))*9 #when indsize is 9 and there are 9 clusters
+parents.initialize() #start locality network but growth is uniform
 
-evolve(parents, 500, False)
+num_edges1 = sum(map(len, parents.population[0].adjL.values()))
+
+parents.population[0].show_grid()
+evolve(parents, 5000, False)
+parents.population[0].show_grid()
+
+num_edges2 = sum(map(len, parents.population[0].adjL.values()))
 
 # Clear print
 print("\n")

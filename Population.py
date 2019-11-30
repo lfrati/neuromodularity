@@ -32,7 +32,7 @@ class Population:
         self.population = [Network(indsize, opts, threshold) 
         for _ in range(popsize)]
 
-    def initialize(self, av_k):
+    def initialize(self):
         """
         Fills empty networks in population with initial connections.
 

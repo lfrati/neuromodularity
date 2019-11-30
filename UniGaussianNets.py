@@ -200,6 +200,7 @@ class Network:
             self.locality = opts["locality"]
             marginals = normal_marginals(self.N, self.locality)
             self.weights = gen_gauss_weights(marginals)
+            self.original_weights = np.copy(self.weights)
 
         elif opts["distr"] == "unif":
             self.distr = opts["distr"]
@@ -220,8 +221,8 @@ class Network:
         """
 
         # Verify that it is possible to sample enough nodes.
-        num_samples = max(num_samples, self.N - 1 - len(self.adjL[node]))
-
+        num_samples = min(num_samples, self.N - 1 - len(self.adjL[node]))
+        
         # Find target nodes as sample.
         samples = np.random.choice(
             self.nodes, p=self.weights[node], replace=False, size=num_samples
@@ -251,19 +252,16 @@ class Network:
         """
 
         # Verify that it is possible to sample enough nodes.
-        num_samples = max(num_samples, self.N - 1 - len(self.adjL[node]))
+        num_samples = min(num_samples, len(self.nodes) - 1 - len(self.adjL[node]))
 
         # Find target nodes as sample.
-        samples = np.random.choice(self.nodes, replace=False, size=num_samples)
+        availableNodes = list(set(self.nodes) - self.adjL[node])
+        samples = np.random.choice(availableNodes, replace=False, size=num_samples)
 
         # Connect to source node
         for sample in samples:
-            self.weights[node][sample] = 0
             self.adjM[node][sample] = 1
             self.adjL[node].add(sample)
-
-        # Set weights
-        self.weights[node] /= self.weights[node].sum()
 
         return samples
 
@@ -283,7 +281,6 @@ class Network:
             new_edges = np.random.normal(loc=av_k, scale=1.0)
             if new_edges < 0:
                 new_edges = 0
-
             self.add_edges(node, int(new_edges))
             
     def set_up(self):
@@ -298,11 +295,14 @@ class Network:
             None (adds edges to empty network).
         """
         
-        tot_num_edges = 324 # if network is 9by9 with 9 clusters
+        tot_num_edges = 648 # if network is 9by9 with 9 clusters
         
-        for edges in range(tot_num_edges):
-            node = np.random.randint(self.nodes)
-            self.add_edges(node, 1)
+        #for i in range(tot_num_edges):
+        #    node = np.random.randint(len(self.nodes))
+        #    self.add_edges(node, 1)
+        for node in self.nodes:
+            for _ in range(8):
+                self.add_edges(node, 1)
 
     def populate_unif(self, av_k):
         """
@@ -337,7 +337,23 @@ class Network:
 
         # Add a single edge to a random node, increment age
         node = random.randrange(0, self.N ** 2)
-        self.add_edges_unif(node, 1) #CHANGE THIS
+        out_node_old = random.sample(self.adjL[node],1)
+        
+        
+        # sample new destination before undoing the old one to avoid re-picking it
+        self.add_edges_unif(node, 1)
+        
+        
+        #self.weights[node][sample] = 0 put back original weight
+        #self.weights[node][out_node_old] = self.original_weights[node][out_node_old]
+
+        # self.adjM[node][sample] = 1
+        self.adjM[node][out_node_old] = 0
+        
+        # self.adjL[node].add(sample)
+        self.adjL[node].discard(out_node_old[0])
+        
+        
         self.muts += 1
 
     def fire(self, iters):
@@ -457,6 +473,7 @@ class Network:
         # Set certain community as firing
         self.fireworthy[self.communities[np.random.randint(len(self.communities))]] = True
 
+        props = []
         
         iters = 100 # measuring fitness after 100 iterations
         while iters > 0: #and len(np.where(self.fireworthy == True)[0]) > 0:
@@ -469,6 +486,7 @@ class Network:
 
             # Find proportion of nodes that fire
             prop = len(firing) / self.N ** 2
+            props.append(prop)
             
             # Reset firing states, keep those that are > threshold
             self.fireworthy = np.array([False] * (self.N ** 2))
@@ -479,7 +497,7 @@ class Network:
 
 
         # Set fitness to SUM
-        self.fitness = prop
+        self.fitness = np.average(props)
 
     def show_adj(self):
         """
