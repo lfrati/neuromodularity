@@ -250,7 +250,7 @@ class Network:
         """
 
         # Verify that it is possible to sample enough nodes.
-        num_samples = max(num_samples, self.N - 1 - len(self.adjL[node]))
+        num_samples = min(num_samples, self.N - 1 - len(self.adjL[node]))
 
         # Find target nodes as sample.
         samples = np.random.choice(self.nodes, replace=False, size=num_samples)
