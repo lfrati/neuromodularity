@@ -189,6 +189,7 @@ class Network:
         self.nodes = np.arange(N ** 2)
         self.fitness = 0
         self.threshold = threshold
+        self.communities = make_communities(3, 3) #so you have a 9by9 network
 
         self.astates = np.zeros(N ** 2)
         self.fireworthy = np.array([False] * (N ** 2))
@@ -284,6 +285,24 @@ class Network:
                 new_edges = 0
 
             self.add_edges(node, int(new_edges))
+            
+    def set_up(self):
+        """
+        Adds edges to the initialised empty network.
+
+        Parameters:
+            :N:                   Number of nodes in the network.
+            :av_k:                Average degree.
+
+        Returns:
+            None (adds edges to empty network).
+        """
+        
+        tot_num_edges = 324 # if network is 9by9 with 9 clusters
+        
+        for edges in range(tot_num_edges):
+            node = np.random.randint(self.nodes)
+            self.add_edges(node, 1)
 
     def populate_unif(self, av_k):
         """
@@ -318,10 +337,10 @@ class Network:
 
         # Add a single edge to a random node, increment age
         node = random.randrange(0, self.N ** 2)
-        self.add_edges(node, 1)
+        self.add_edges_unif(node, 1) #CHANGE THIS
         self.muts += 1
 
-    def fire(self):
+    def fire(self, iters):
         """
         Fires every node in the graph.
 
@@ -340,9 +359,12 @@ class Network:
             neigh = list(self.adjL[i])
 
             if len(neigh) > 0:
-                self.astates[neigh] += 20
+                if iters == 100:
+                    self.astates[neigh] += self.threshold
+                else:
+                    self.astates[neigh] += 20
 
-    def evaluate(self):
+    def evaluate_2comp(self):
         """
         Evaluates the performance of a network on two main pieces
 
@@ -359,15 +381,18 @@ class Network:
         edges = []
         props = []
 
-        # Set all states as firing
-        self.fireworthy = np.array([True] * (self.N ** 2))
+        # Set all states as not firing
+        self.fireworthy = np.array([False] * (self.N ** 2))
+        
+        # Set certain community as firing
+        self.fireworthy[self.communities[np.random.randint(len(self.communities))]] = True
 
-        # While there are still SOME fireworthy states:
-        iters = 1000
-        while iters > 0 and len(np.where(self.fireworthy == True)[0]) > 0:
+        
+        iters = 100 # measuring fitness after 100 iterations
+        while iters > 0: #and len(np.where(self.fireworthy == True)[0]) > 0:
             # Update activity states
-            self.fire()
-            print("fired")
+            self.fire(iters)
+            #print("fired")
 
             # Save all edges associated with fireworthy nodes
             firing = np.where(self.astates >= self.threshold)[0]
@@ -405,17 +430,56 @@ class Network:
         ### Find first component of fitness ###
         fitness_comp_1 = ((idx / num_edges) * 100) / 2  # this goes from 0 to 75/2
         ###                                 ###
-        print(fitness_comp_1)
+        #print(fitness_comp_1)
 
         ### Find second component of fitness ###
-        fitness_comp_2 = (
-            (np.average(props) * 1000) + 15
-        ) * 4  # fitness 2 is more important, 0 to 80
+        fitness_comp_2 = ((np.average(props) * 1000) + 15) * 4  # fitness 2 is more important, 0 to 80
         ###                                  ###
-        print(fitness_comp_2)
+        #print(fitness_comp_2)
 
         # Set fitness to SUM
         self.fitness = np.sum([fitness_comp_1, fitness_comp_2])
+    
+    def evaluate_1comp(self):
+        """
+        Evaluates the performance of a network on one main piece
+
+        Parameters:
+            None
+
+        Returns:
+            None
+        """
+
+        # Set all states as not firing
+        self.fireworthy = np.array([False] * (self.N ** 2))
+        
+        # Set certain community as firing
+        self.fireworthy[self.communities[np.random.randint(len(self.communities))]] = True
+
+        
+        iters = 100 # measuring fitness after 100 iterations
+        while iters > 0: #and len(np.where(self.fireworthy == True)[0]) > 0:
+            # Update activity states
+            self.fire(iters)
+            #print("fired")
+
+            # Save all nodes that will fire
+            firing = np.where(self.astates >= self.threshold)[0]
+
+            # Find proportion of nodes that fire
+            prop = len(firing) / self.N ** 2
+            
+            # Reset firing states, keep those that are > threshold
+            self.fireworthy = np.array([False] * (self.N ** 2))
+            self.fireworthy[np.where(self.astates >= self.threshold)] = True
+            self.astates = np.zeros(self.N ** 2)
+
+            iters -= 1
+
+
+        # Set fitness to SUM
+        self.fitness = prop
 
     def show_adj(self):
         """

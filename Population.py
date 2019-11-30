@@ -47,7 +47,7 @@ class Population:
         for i in self.population:
 
             # Initialize / populate them.
-            i.populate(av_k)
+            i.set_up()
             
     def initialize_unif(self, av_k):
         """
@@ -100,4 +100,4 @@ class Population:
         for i in self.population:
 
             # Evaluate them:
-            i.evaluate()
+            i.evaluate_1comp()
