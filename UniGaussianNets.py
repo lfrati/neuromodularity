@@ -20,7 +20,9 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
 
 ### HELPER FUNCTIONS
-def make_communities(community_side, communities_per_side): #this is for creating communities but it is not used in this version of the code
+
+#this is for creating communities but it is not used in this version of the code
+def make_communities(community_side, communities_per_side): 
     """
     Compute indexes for communities on a lattice
     e.g.
@@ -69,11 +71,10 @@ def make_communities(community_side, communities_per_side): #this is for creatin
                     community.append(_id)
                 # print("- ", end="")
             communities.append(community)
-            print()
     return communities
 
-
-def gauss(x, mean, scale):  # values here were tweaked for our fitness function
+# values here were tweaked for our fitness function
+def gauss(x, mean, scale):  
     return (
         1
         / (scale * math.sqrt(2 * math.pi))
@@ -84,14 +85,11 @@ def gauss(x, mean, scale):  # values here were tweaked for our fitness function
     x = gauss(y, 70, 20)
     plt.plot(x)
 
-
 def node_to_idxs(node, N):
     return [node // N, node % N]
 
-
 def unzip(l):
     return list(zip(*l))
-
 
 def normal_marginals(side_len, locality):
     rv = norm(loc=0, scale=locality)
@@ -110,7 +108,6 @@ def normal_marginals(side_len, locality):
         assert np.isclose(subset.sum(), 1.0)
     return marginals
 
-
 def gen_gauss_weights(marginals):
     weights = []
     for i, col in enumerate(marginals):
@@ -122,11 +119,9 @@ def gen_gauss_weights(marginals):
             weights.append(w.flatten())
     return np.array(weights)
 
-
 def gen_unif_weights(N):
     w = np.ones((N ** 2, N ** 2))
     return w / N ** 2
-
 
 def show_weights(weights, N):
     i = 0
@@ -135,7 +130,6 @@ def show_weights(weights, N):
         plt.imshow(w)
         plt.show()
         i += np.random.randint(N ** 2 // 3)
-
 
 def show_3d_weights(weights, N):
     fig = plt.figure()
@@ -166,45 +160,56 @@ def show_3d_weights(weights, N):
 
 class Network:
     def __init__(
-        self, N=5, opts={"distr": "gauss", "locality": 0.2}, threshold=100, ID=0
+        self, 
+        N=5, 
+        dist = "gauss",
+        locality = 0.2,
+        threshold = 100,
+        comshape = None
     ):
         """
         Initialization of network object.
 
         Parameters:
             :int N:         The side length of the network grid.
-            :dict opts:     The dictionary of parameters.
 
         Returns:
             None. Constructor method.
         """
 
-        # Define default attributes
+        # core network attributes:
         self.N = N
-        self.opts = opts
-        self.age = 0
-        self.muts = 0
+        self.dist = dist 
+        self.locality = locality
+        self.threshold = threshold
+        self.comshape = comshape
+
         self.adjM = np.zeros((N ** 2, N ** 2))
         self.adjL = defaultdict(set)
         self.nodes = np.arange(N ** 2)
-        self.fitness = 0
-        self.threshold = threshold
-
         self.astates = np.zeros(N ** 2)
         self.fireworthy = np.array([False] * (N ** 2))
 
-        # Define more default attributes
-        if opts["distr"] == "gauss":
-            self.distr = opts["distr"]
-            self.locality = opts["locality"]
+        # evolution attributes
+        self.age = 0
+        self.muts = 0
+        self.fitness = 0
+
+        # Initialize distributions
+        if dist == "gauss":
             marginals = normal_marginals(self.N, self.locality)
             self.weights = gen_gauss_weights(marginals)
 
-        elif opts["distr"] == "unif":
-            self.distr = opts["distr"]
+        elif dist == "uniform":
             self.weights = gen_unif_weights(self.N)
         else:
-            raise RuntimeError("Distribution not implemented: " + opts["distr"])
+            raise RuntimeError("Distribution not implemented: " + str(dist))
+
+        # Initialize communities
+        if (comshape != None):
+            self.communities = make_communities(comshape[0], comshape[1 ])
+        else:
+            self.communities = None
 
     def add_edges(self, node, num_samples):
         """
@@ -212,7 +217,7 @@ class Network:
 
         Parameters:
             :int node:          The node that is being connected to (source)
-            :int num_samples:   The number of nodes to be connected to the source
+            :int num_samples:   The # of nodes to be connected to the source
 
         Returns:
             None. Changes adjL and adjM.
@@ -222,46 +227,35 @@ class Network:
         num_samples = min(num_samples, self.N - 1 - len(self.adjL[node]))
 
         # Find target nodes as sample.
-        samples = np.random.choice(
-            self.nodes, p=self.weights[node], replace=False, size=num_samples
-        )
 
-        # Connect to source node
-        for sample in samples:
-            self.weights[node][sample] = 0
-            self.adjM[node][sample] = 1
-            self.adjL[node].add(sample)
+        if (self.dist == "gauss"):
+            samples = np.random.choice(
+                self.nodes, p=self.weights[node], 
+                replace=False, size=num_samples
+            )
 
-        # Set weights
-        self.weights[node] /= self.weights[node].sum()
+            # Connect to source node
+            for sample in samples:
+                self.weights[node][sample] = 0
+                self.adjM[node][sample] = 1
+                self.adjL[node].add(sample)
 
-        return samples
+            # Set weights
+            self.weights[node] /= self.weights[node].sum()
 
-    def add_edges_unif(self, node, num_samples): #adding edges uniformly
-        """
-        Adds a number of edges to a given node.
+            return samples
 
-        Parameters:
-            :int node:          The node that is being connected to (source)
-            :int num_samples:   The number of nodes to be connected to the source
+        elif (self.dist == "uniform"):
+            availableNodes = list(set(self.nodes) - self.adjL[node])
+            samples = np.random.choice(availableNodes, 
+                replace=False, size=num_samples)
 
-        Returns:
-            None. Changes adjL and adjM.
-        """
+            # Connect to source node
+            for sample in samples:
+                self.adjM[node][sample] = 1
+                self.adjL[node].add(sample)
 
-        # Verify that it is possible to sample enough nodes.
-        num_samples = min(num_samples, self.N - 1 - len(self.adjL[node]))
-
-        # Find target nodes as sample.
-        availableNodes = list(set(self.nodes) - self.adjL[node])
-        samples = np.random.choice(availableNodes, replace=False, size=num_samples)
-
-        # Connect to source node
-        for sample in samples:
-            self.adjM[node][sample] = 1
-            self.adjL[node].add(sample)
-
-        return samples
+            return samples
 
     def populate(self, av_k):
         """
@@ -275,31 +269,22 @@ class Network:
             None (adds edges to empty network).
         """
 
-        for node in range(self.N ** 2):
-            new_edges = np.random.normal(loc=av_k, scale=1.0)
-            if new_edges < 0:
-                new_edges = 0
+        # If a variable number of edges is being used
+        if (self.comshape == None):
+            for node in range(self.N ** 2):
+                new_edges = np.random.normal(loc=av_k, scale=1.0)
+                if new_edges < 0:
+                    new_edges = 0
 
-            self.add_edges(node, int(new_edges))
+                self.add_edges(node, int(new_edges))
 
-    def populate_unif(self, av_k): #initialise edges uniformly
-        """
-        Adds edges to the initialised empty network.
+        # If a constant number of edges is being used:
+        elif (self.comshape != None):
+            icount = ((self.comshape[0] ** 2) - 1)
 
-        Parameters:
-            :N:                   Number of nodes in the network.
-            :av_k:                Average degree.
-
-        Returns:
-            None (adds edges to empty network).
-        """
-
-        for node in range(self.N ** 2):
-            new_edges = np.random.normal(loc=av_k, scale=1.0)
-            if new_edges < 0:
-                new_edges = 0
-
-            self.add_edges_unif(node, int(new_edges))
+            for node in self.nodes:
+                for _ in range(icount):
+                    self.add_edges(node, 1)
 
     def mutate(self):
         """
@@ -315,15 +300,15 @@ class Network:
 
         # Add a single edge to a random node, increment age
         node = random.randrange(0, self.N ** 2)
-        self.add_edges(node, 1) #when growing edges uniformly use self.add_edges_unif()
+        self.add_edges(node, 1) 
         self.muts += 1
 
-    def fire(self):
+    def fire(self, iter):
         """
         Fires every node in the graph.
 
         Parameters:
-            None
+            :int iter:      The iteration currently being fired.
 
         Returns:
             None
@@ -337,11 +322,16 @@ class Network:
             neigh = list(self.adjL[i])
 
             if len(neigh) > 0:
-                self.astates[neigh] += 20
+                if (iter == 100):
+                    self.astates[neigh] += self.threshold
+                else:
+                    self.astates[neigh] += 20
 
     def evaluate(self):
         """
-        Evaluates the performance of a network on two main pieces
+        Evaluates the performance of network according to one of two
+        main schemes. The network can bested according to a variable edgecount,
+        or based on a constant edgecount.
 
         Parameters:
             None
@@ -350,69 +340,111 @@ class Network:
             None
         """
 
-        ### Find first fitness component: ###
-        # Making sure one edge does not dominate fire count
+        if (self.comshape == None):
 
-        edges = []
-        props = []
+            ### Find first fitness component: ###
+            # Making sure one edge does not dominate fire count
+            edges = []
+            props = []
 
-        # Set all states as firing
-        self.fireworthy = np.array([True] * (self.N ** 2))
+            # Set all states as firing
+            self.fireworthy = np.array([True] * (self.N ** 2))
 
-        # While there are still SOME fireworthy states:
-        iters = 1000
-        while iters > 0 and len(np.where(self.fireworthy == True)[0]) > 0:
-            # Update activity states
-            self.fire()
-            print("fired")
+            # While there are still SOME fireworthy states:
+            iters = 1000
+            while iters > 0 and len(np.where(self.fireworthy == True)[0]) > 0:
+                
+                # Update activity states
+                self.fire(iters)
 
-            # Save all edges associated with fireworthy nodes
-            firing = np.where(self.astates >= self.threshold)[0]
+                # Save all edges associated with fireworthy nodes
+                firing = np.where(self.astates >= self.threshold)[0]
 
-            # Find proportion of nodes that fire
-            prop = len(firing) / self.N ** 2
-            props.append(
-                gauss((prop * 100), 70, 15)
-            )  # this is the fitness component for overall node activity
+                # Find proportion of nodes that fire
+                # this is the fitness component for overall node activity
+                prop = len(firing) / self.N ** 2
+                props.append(
+                    gauss((prop * 100), 70, 15)
+                )
 
-            for i in firing:
-                edge = [(i, x) for x in self.adjL[i]]  # this tracks edge activity
-                edges += edge
+                # this tracks edge activity
+                for i in firing:
+                    edge = [(i, x) for x in self.adjL[i]] 
+                    edges += edge
 
-            # Reset firing states, keep those that are > threshold
+                # Reset firing states, keep those that are > threshold
+                self.fireworthy = np.array([False] * (self.N ** 2))
+                self.fireworthy[np.where(self.astates >= self.threshold)] = True
+                self.astates = np.zeros(self.N ** 2)
+
+                iters -= 1
+
+            num_edges = sum(map(len, self.adjL.values()))
+
+            if len(edges) > 0:
+                ecount = sorted(Counter(map(tuple, edges)).values(), 
+                    reverse=True)
+                T = sum(ecount) * 0.75
+                summ = 0
+                idx = 0
+                while summ <= T:
+                    summ = summ + ecount[idx]
+                    idx += 1
+            else:
+                idx = 0
+
+            ### Find first component of fitness ###
+            # this goes from 0 to 75/2
+            fitness_comp_1 = ((idx / num_edges) * 100) / 2  
+            ###                                 ###
+
+            ### Find second component of fitness ###
+            fitness_comp_2 = (
+                (np.average(props) * 1000) + 15
+            ) * 4  # fitness 2 is more important, 0 to 80
+            ###                                  ###
+
+            # Set fitness to SUM
+            self.fitness = np.sum([fitness_comp_1, fitness_comp_2])
+
+        elif (self.comshape != None):
+
+            # Set all states as not firing
             self.fireworthy = np.array([False] * (self.N ** 2))
-            self.fireworthy[np.where(self.astates >= self.threshold)] = True
-            self.astates = np.zeros(self.N ** 2)
+            
+            # Set certain community as firing
+            self.fireworthy[
+            self.communities[np.random.randint(len(self.communities))]] = True
 
-            iters -= 1
+            props = []
+            
+            # measuring fitness after 100 iterations
+            iters = 100
+            while iters > 0: #and len(np.where(self.fireworthy == True)[0]) > 0:
 
-        num_edges = sum(map(len, self.adjL.values()))
+                # Update activity states
+                self.fire(iters)
 
-        if len(edges) > 0:
-            ecount = sorted(Counter(map(tuple, edges)).values(), reverse=True)
-            T = sum(ecount) * 0.75
-            summ = 0
-            idx = 0
-            while summ <= T:
-                summ = summ + ecount[idx]
-                idx += 1
+                # Save all nodes that will fire
+                firing = np.where(self.astates >= self.threshold)[0]
+
+                # Find proportion of nodes that fire
+                prop = len(firing) / self.N ** 2
+                props.append(prop)
+
+                # Reset firing states, keep those that are > threshold
+                self.fireworthy = np.array([False] * (self.N ** 2))
+                self.fireworthy[np.where(self.astates >= self.threshold)] = True
+                self.astates = np.zeros(self.N ** 2)
+
+                iters -= 1
+
+
+            # Set fitness to SUM
+            self.fitness = np.average(props)
+
         else:
-            idx = 0
-
-        ### Find first component of fitness ###
-        fitness_comp_1 = ((idx / num_edges) * 100) / 2  # this goes from 0 to 75/2
-        ###                                 ###
-        print(fitness_comp_1)
-
-        ### Find second component of fitness ###
-        fitness_comp_2 = (
-            (np.average(props) * 1000) + 15
-        ) * 4  # fitness 2 is more important, 0 to 80
-        ###                                  ###
-        print(fitness_comp_2)
-
-        # Set fitness to SUM
-        self.fitness = np.sum([fitness_comp_1, fitness_comp_2])
+            print("No dist found")
 
     def show_adj(self):
         """
@@ -460,35 +492,3 @@ class Network:
         plt.figure(figsize=(16, 16))
         nx.draw(g, with_labels=labels, pos=pos, node_size=size)
         plt.show()
-
-    def serialize(self):
-        """
-        Saves the attributes of a given network.
-        """
-
-        # Find some init params.
-        opts = deepcopy(self.opts)
-        opts["N"] = self.N
-
-        # Dump them all into a JSON, save with date/time
-        info = [json.dumps(opts) + "\n"]
-        timestr = time.strftime("%Y-%m-%d_%H%M%S")
-        name = (
-            timestr
-            + "_"
-            + "_".join(
-                [
-                    name + "_" + str(val).replace(".", "")
-                    for name, val in self.opts.items()
-                ]
-            )
-        )
-        name += ".edgelist"
-        data = [
-            "{} {}\n".format(node, neigh)
-            for node, neighs in self.adjL.items()
-            for neigh in neighs
-        ]
-        with open(name, "w") as f:
-            f.writelines(info + data)
-        return name

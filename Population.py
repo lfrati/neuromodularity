@@ -11,25 +11,34 @@ class Population:
     This will take advantage of a basic mutation / selection scheme.
     """
 
-    def __init__(self, popsize, indsize, opts, threshold):
+    def __init__(self, popsize, indsize, dist, locality, threshold, comshape):
         """
         Initializes a list of networks of a given size, distribution,
         and locality. 
 
         Parameters:
-            :int size:      Number of inviduals in the population.
-            :int indsize:   Size of networks.
-            :dict opts:     Network specific options.
-            :int threshold: The threshold of the networks.
+            :int size:          Number of inviduals in the population.
+            :int indsize:       Size of networks.
+            :str dist:          The distribution of the networks
+            :float locality:    The locality of the networks
+            :int threshold:     The threshold of the networks.
+            :tuple comshape:    Community shape. Com size * coms per side
 
         Returns:
             None. Costructor method.
         """
 
-        self.opts = opts
+        self.dist = dist 
+        self.locality = locality 
         self.size = popsize
         self.indsize = indsize
-        self.population = [Network(indsize, opts, threshold) 
+        self.comshape = comshape
+        self.population = [Network(
+            N = self.indsize, 
+            dist = self.dist, 
+            locality = self.locality,
+            threshold = threshold,
+            comshape = comshape) 
         for _ in range(popsize)]
 
     def initialize(self, av_k):
@@ -48,23 +57,6 @@ class Population:
 
             # Initialize / populate them.
             i.populate(av_k)
-            
-    def initialize_unif(self, av_k):
-        """
-        Fills empty networks in population with initial connections.
-
-        Parameters:
-            :int av_k:          Average degree of each node.
-
-        Returns:
-            None.
-        """
-
-        # For each individual
-        for i in self.population:
-
-            # Initialize / populate them.
-            i.populate_unif(av_k)
 
     def mutate(self):
         """
