@@ -47,9 +47,9 @@ class Population:
         for i in self.population:
 
             # Initialize / populate them.
-            i.set_up()
+            i.set_up() #adds specific number of edges rather than using average degree
             
-    def initialize_unif(self, av_k):
+    def initialize_unif(self): #specific number of edges uniformly distributed
         """
         Fills empty networks in population with initial connections.
 
@@ -64,7 +64,7 @@ class Population:
         for i in self.population:
 
             # Initialize / populate them.
-            i.populate_unif(av_k)
+            i.set_up_unif()
 
     def mutate(self):
         """
@@ -100,4 +100,4 @@ class Population:
         for i in self.population:
 
             # Evaluate them:
-            i.evaluate_1comp()
+            i.evaluate_1comp() #here the fitness only has 1 component 

@@ -189,7 +189,7 @@ class Network:
         self.nodes = np.arange(N ** 2)
         self.fitness = 0
         self.threshold = threshold
-        self.communities = make_communities(3, 3) #so you have a 9by9 network
+        self.communities = make_communities(3, 3) #so you have a 9by9 network with 9 communities
 
         self.astates = np.zeros(N ** 2)
         self.fireworthy = np.array([False] * (N ** 2))
@@ -239,7 +239,7 @@ class Network:
 
         return samples
 
-    def add_edges_unif(self, node, num_samples):
+    def add_edges_unif(self, node, num_samples): #adds edges uniformly
         """
         Adds a number of edges to a given node.
 
@@ -264,26 +264,8 @@ class Network:
             self.adjL[node].add(sample)
 
         return samples
-
-    def populate(self, av_k):
-        """
-        Adds edges to the initialised empty network.
-
-        Parameters:
-            :N:                   Number of nodes in the network.
-            :av_k:                Average degree.
-
-        Returns:
-            None (adds edges to empty network).
-        """
-
-        for node in range(self.N ** 2):
-            new_edges = np.random.normal(loc=av_k, scale=1.0)
-            if new_edges < 0:
-                new_edges = 0
-            self.add_edges(node, int(new_edges))
             
-    def set_up(self):
+    def set_up(self): #adds specific number of edges rather than using average degree
         """
         Adds edges to the initialised empty network.
 
@@ -295,16 +277,15 @@ class Network:
             None (adds edges to empty network).
         """
         
-        tot_num_edges = 648 # if network is 9by9 with 9 clusters
+        # Warning: this is hard coded for a network with 9 x 9 nodes and 9 communities!
         
-        #for i in range(tot_num_edges):
-        #    node = np.random.randint(len(self.nodes))
-        #    self.add_edges(node, 1)
+        tot_num_edges = 648
+        
         for node in self.nodes:
             for _ in range(8):
                 self.add_edges(node, 1)
-
-    def populate_unif(self, av_k):
+                
+    def set_up_unif(self):
         """
         Adds edges to the initialised empty network.
 
@@ -315,13 +296,15 @@ class Network:
         Returns:
             None (adds edges to empty network).
         """
+        
+        # Warning: this is hard coded for a network with 9 x 9 nodes and 9 communities!
+        
+        tot_num_edges = 648
+        
+        for node in self.nodes:
+            for _ in range(8):
+                self.add_edges_unif(node, 1)
 
-        for node in range(self.N ** 2):
-            new_edges = np.random.normal(loc=av_k, scale=1.0)
-            if new_edges < 0:
-                new_edges = 0
-
-            self.add_edges_unif(node, int(new_edges))
 
     def mutate(self):
         """
@@ -334,6 +317,8 @@ class Network:
         Returns:
             None
         """
+        
+        #Mutation happens by both adding and removing an edge of a chosen node (i.e. rewiring)
 
         # Add a single edge to a random node, increment age
         node = random.randrange(0, self.N ** 2)
@@ -341,7 +326,7 @@ class Network:
         
         
         # sample new destination before undoing the old one to avoid re-picking it
-        self.add_edges_unif(node, 1)
+        self.add_edges_unif(node, 1) #growth is uniform in this case
         
         
         #self.weights[node][sample] = 0 put back original weight
@@ -375,88 +360,13 @@ class Network:
             neigh = list(self.adjL[i])
 
             if len(neigh) > 0:
-                if iters == 100:
+                if iters == 100: #the first time the network fires it is a bigger signal
                     self.astates[neigh] += self.threshold
                 else:
                     self.astates[neigh] += 20
-
-    def evaluate_2comp(self):
-        """
-        Evaluates the performance of a network on two main pieces
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
-
-        ### Find first fitness component: ###
-        # Making sure one edge does not dominate fire count
-
-        edges = []
-        props = []
-
-        # Set all states as not firing
-        self.fireworthy = np.array([False] * (self.N ** 2))
-        
-        # Set certain community as firing
-        self.fireworthy[self.communities[np.random.randint(len(self.communities))]] = True
-
-        
-        iters = 100 # measuring fitness after 100 iterations
-        while iters > 0: #and len(np.where(self.fireworthy == True)[0]) > 0:
-            # Update activity states
-            self.fire(iters)
-            #print("fired")
-
-            # Save all edges associated with fireworthy nodes
-            firing = np.where(self.astates >= self.threshold)[0]
-
-            # Find proportion of nodes that fire
-            prop = len(firing) / self.N ** 2
-            props.append(
-                gauss((prop * 100), 70, 15)
-            )  # this is the fitness component for overall node activity
-
-            for i in firing:
-                edge = [(i, x) for x in self.adjL[i]]  # this tracks edge activity
-                edges += edge
-
-            # Reset firing states, keep those that are > threshold
-            self.fireworthy = np.array([False] * (self.N ** 2))
-            self.fireworthy[np.where(self.astates >= self.threshold)] = True
-            self.astates = np.zeros(self.N ** 2)
-
-            iters -= 1
-
-        num_edges = sum(map(len, self.adjL.values()))
-
-        if len(edges) > 0:
-            ecount = sorted(Counter(map(tuple, edges)).values(), reverse=True)
-            T = sum(ecount) * 0.75
-            summ = 0
-            idx = 0
-            while summ <= T:
-                summ = summ + ecount[idx]
-                idx += 1
-        else:
-            idx = 0
-
-        ### Find first component of fitness ###
-        fitness_comp_1 = ((idx / num_edges) * 100) / 2  # this goes from 0 to 75/2
-        ###                                 ###
-        #print(fitness_comp_1)
-
-        ### Find second component of fitness ###
-        fitness_comp_2 = ((np.average(props) * 1000) + 15) * 4  # fitness 2 is more important, 0 to 80
-        ###                                  ###
-        #print(fitness_comp_2)
-
-        # Set fitness to SUM
-        self.fitness = np.sum([fitness_comp_1, fitness_comp_2])
+                    
     
-    def evaluate_1comp(self):
+    def evaluate_1comp(self): #fitness function only with 1 components, the more fires the better
         """
         Evaluates the performance of a network on one main piece
 
