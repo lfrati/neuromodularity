@@ -54,7 +54,7 @@ function reset() {
 function setup() {
   spikeColor = color(255, 0, 50);
   restColor = color(0, 65, 225);
-  cnv = createCanvas(600, 600);
+  cnv = createCanvas(600, 800);
   white = color(255, 255, 255);
   red = color(255, 0, 0);
   green = color(0, 255, 0);
@@ -64,7 +64,8 @@ function setup() {
   });
   seed_btn = createButton("seed");
   seed_btn.mousePressed(() => {
-    let seedComm = random(communitiesList);
+    // let seedComm = random(communitiesList);
+    let seedComm = 0;
     for (let node of communitiesNodes[seedComm]) {
       node.fire(true, 1);
     }
@@ -80,7 +81,7 @@ function setup() {
 
   reset();
 }
-
+let inDistr = [];
 function draw() {
   background(50);
 
@@ -95,6 +96,37 @@ function draw() {
   network.show();
   network.animate();
   network.update();
+
+  inDistr = [];
+  let sum = 0.0;
+  for (let node of network.nodes) {
+    inDistr.push(node.in.length);
+    sum += node.in.length;
+  }
+  inDistr.sort((a, b) => {
+    return +a < +b;
+  });
+  // let maxInDeg = max(inDistr);
+  stroke(255);
+  noFill();
+  beginShape();
+  let pos = 2;
+  let incr = width / inDistr.length;
+  for (let deg of inDistr) {
+    vertex(pos, height - deg * 7);
+    pos += incr;
+  }
+  endShape();
+  text(str(inDistr[0]), 5, height - inDistr[0] * 7 - 2);
+  text(
+    str(inDistr[inDistr.length - 1]),
+    width - 18,
+    height - inDistr[inDistr.length - 1] * 7 + 12
+  );
+  let avg = sum / inDistr.length;
+  stroke(255, 0, 0);
+  strokeWeight(0.5);
+  line(0, height - avg * 7, width, height - avg * 7);
 }
 
 class Network {
@@ -283,7 +315,7 @@ class Node {
     this.id = ID;
     this.out = [];
     this.in = [];
-    this.base_threshold = network.commSize / 4;
+    this.base_threshold = (network.commSize - 1) / 2;
     this.activity = 0;
     this.threshold = this.base_threshold;
     this.fired = false;
@@ -291,7 +323,7 @@ class Node {
 
   // force is used so that clicking bypasses the infection probability
   fire(force) {
-    if (force || this.activity > this.threshold) {
+    if (force || this.activity >= this.threshold) {
       this.fired = true;
       for (let edge of this.out) {
         // if we have not reached the max amount of carriers add a new one
