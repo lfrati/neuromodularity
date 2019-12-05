@@ -326,11 +326,11 @@ class Network:
         
         
         # sample new destination before undoing the old one to avoid re-picking it
-        self.add_edges_unif(node, 1) #growth is uniform in this case
+        self.add_edges(node, 1)
         
         
         #self.weights[node][sample] = 0 put back original weight
-        #self.weights[node][out_node_old] = self.original_weights[node][out_node_old]
+        self.weights[node][out_node_old] = self.original_weights[node][out_node_old]
 
         # self.adjM[node][sample] = 1
         self.adjM[node][out_node_old] = 0
@@ -360,7 +360,7 @@ class Network:
             neigh = list(self.adjL[i])
 
             if len(neigh) > 0:
-                if iters == 100: #the first time the network fires it is a bigger signal
+                if iters == 50: #the first time the network fires it is a bigger signal
                     self.astates[neigh] += self.threshold
                 else:
                     self.astates[neigh] += 20
@@ -385,7 +385,7 @@ class Network:
 
         props = []
         
-        iters = 100 # measuring fitness after 100 iterations
+        iters = 50 # measuring fitness after 100 iterations
         while iters > 0: #and len(np.where(self.fireworthy == True)[0]) > 0:
             # Update activity states
             self.fire(iters)
@@ -405,9 +405,16 @@ class Network:
 
             iters -= 1
 
+        my_set_f = set(firing)
+        comm_fired = 0 #number of communities where all nodes fired
+        for c in self.communities:
+            my_set_comm = set(c)
+            comm_f = my_set_f.intersection(my_set_comm) #communities and firing intersection
+            if len(comm_f) == len(my_set_comm):
+                comm_fired += 1
+                print(my_set_comm)
 
-        # Set fitness to SUM
-        self.fitness = np.average(props)
+        self.fitness = np.average(props) + comm_fired
 
     def show_adj(self):
         """
