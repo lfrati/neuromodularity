@@ -18,7 +18,6 @@ import matplotlib.pyplot as plt
 
 from scipy.stats import norm
 
-
 class Network:
     """
     The core network class.
@@ -51,6 +50,10 @@ class Network:
         kwargs.setdefault("stype", "gaussian")
         kwargs.setdefault("locality", 0.25)
         kwargs.setdefault("comshape", None)
+
+        self.__dict__.update(kwargs)
+
+        kwargs.setdefault("mweights", make_master_weights(self.N, self.locality))
 
         self.__dict__.update(kwargs)
 
@@ -98,20 +101,17 @@ class Network:
         num_samples = min(num, self.N - 1 - len(self.adjL[node]))
 
         if (self.stype == "gaussian"):
+
+            subset = compute_gaussian_weights(self.mweights, node, self.adjL)
+
             samples = np.random.choice(
                 a = self.nodes,
-                p = self.weights[node],
+                p = subset,
                 replace = False,
                 size = num
             )
 
-            for sample in samples:
-                self.weights[node][sample] = 0
-                self.adjL[node].add(sample)
-
-            self.weights[node] /= self.weights[node].sum()
-
-            return samples 
+            self.adjL[node].update(samples)
 
         elif (self.dist == "uniform"):
             availableNodes = list(set(self.nodes) - self.adjL[node])
@@ -120,11 +120,7 @@ class Network:
                 replace = False, 
                 size = num)
 
-            # Connect to source node
-            for sample in samples:
-                self.adjL[node].add(sample)
-
-            return samples
+            self.adjL[node].update(samples)
 
     def mutate(self):
         """
@@ -345,3 +341,42 @@ def gen_gauss_weights(marginals):
 def gen_unif_weights(N):
     w = np.ones((N ** 2, N ** 2))
     return w / N ** 2
+
+def make_master_weights(N,locality):
+    rv = norm(loc=0, scale=locality)
+
+    # size is twice as big because we are going to use NxN subsets of it
+    x = np.linspace(-1, 1, N * 2+1) 
+
+    # make marginal gaussians
+    p = rv.pdf(x) 
+
+    # use numpy magic to make them of the right shapes before combining them
+    X, Y = np.meshgrid(p, p) 
+
+    # compute the 2D gaussian by multiplying the marginals together
+    w = X * Y 
+    w /= w.sum()
+    return w
+
+def node_to_idxs(node, N):
+    return node // N, node % N
+
+def get_subset(W, node,N):
+    assert 0 <= node and node < N*N, f"Node index out of bounds: {node}"
+    i,j = node_to_idxs(node,N) # convert node index to row,col coordinates
+    subset = W[N-i:N-i+N,N-j:N-j+N] # extract a subset of the master_weights
+    return np.copy(subset) # make a copy to make sure subsequent manipulations don't affect the master
+
+def compute_gaussian_weights(W,node,adjL):
+    tmp,N = W.shape
+    tmp,N = tmp//2, N//2 # recover side-len from the weigths matrix, yeah, I did't want to have an extra parameter going around
+    assert tmp == N, f"Weights have not the expected shape: Expected ({N},{N}), got ({tmp},{N})"
+    gauss = get_subset(W,node,N) # get the appropiate subset in the manner we have shown above
+    i,j = node_to_idxs(node,N) # zero the node coords to avoid self loops
+    gauss[i][j] = 0
+    for neigh in adjL[node]: # go through the neighs in the adjlist and zero them
+        i,j = node_to_idxs(neigh,N)
+        gauss[i][j] = 0
+    gauss = gauss / gauss.sum() # normalize everything to make sure we have probabilities
+    return gauss.flatten() # flatten them to use with np.random.choice
