@@ -209,13 +209,13 @@ def genetic(parents, tstep, save):
 ### Driver and examples
 
 #  Gaussian, no communities
-parents = Population(
-    popsize= 100, 
-    indsize=10, 
-    dist="gauss", 
-    locality=0.5, 
-    threshold=200,
-    comshape = None)
+#parents = Population(
+    #popsize= 1, 
+    #indsize=10, 
+    #stype="gauss", 
+    #locality=0.1, 
+    #threshold=100,
+    #comshape = None)
 
 # Uniform, no communities
 
@@ -229,13 +229,13 @@ parents = Population(
 
 # Gaussian, with 3 communities of side-length 3 per network grid side
 
-# parents = Population(
-#     popsize= 100, 
-#     indsize=10, 
-#     dist="gauss", 
-#     locality=0.5, 
-#     threshold=200,
-#     comshape = (3,3))
+parents = Population(
+     popsize= 1, 
+     indsize=9, 
+     dist="gauss", 
+     locality=0.5, 
+     threshold=160,
+     comshape = (3,3))
 
 # Uniform, with communities!
 
@@ -251,4 +251,4 @@ parents = Population(
 # sampling methods are determined automatically on initialization.
 
 parents.initialize(av_k = 1)
-hillclimb(parents, 500, False)
+hillclimb(parents, 10000, False)

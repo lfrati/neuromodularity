@@ -81,9 +81,12 @@ class Network:
         if (self.stype == "gaussian"):
             marginals = normal_marginals(self.N, self.locality)
             self.weights = gen_gauss_weights(marginals)
+            self.original_weights = np.copy(self.weights)
 
         elif (self.stype == "uniform"):
             self.weights = gen_unif_weights(self.N)
+            self.original_weights = np.copy(self.weights)
+            
 
     def add_edges(self, node, num):
         """
@@ -113,7 +116,7 @@ class Network:
 
             self.adjL[node].update(samples)
 
-        elif (self.dist == "uniform"):
+        elif (self.stype == "uniform"):
             availableNodes = list(set(self.nodes) - self.adjL[node])
             samples = np.random.choice(
                 a = availableNodes, 
@@ -133,13 +136,33 @@ class Network:
         Returns:
             None
         """
+        
+        if (self.comshape == None):
+            # Add a single edge to a random node, increment age
+            node = random.randrange(0, self.N ** 2)
+            self.add_edges(node, 1) 
+            self.muts += 1
+        else:
+            #Mutation happens by both adding and removing an edge of a chosen node (i.e. rewiring)
 
-        # Add a single edge to a random node, increment age
-        node = random.randrange(0, self.N ** 2)
-        self.add_edges(node, 1) 
-        self.muts += 1
+            # Add a single edge to a random node, increment age
+            node = random.randrange(0, self.N ** 2)
+            out_node_old = random.sample(self.adjL[node],1)
 
-    def spike(self):
+
+            # sample new destination before undoing the old one to avoid re-picking it
+            self.add_edges(node, 1)
+
+
+            #self.weights[node][sample] = 0 put back original weight
+            self.weights[node][out_node_old] = self.original_weights[node][out_node_old]
+
+            # self.adjL[node].add(sample)
+            self.adjL[node].discard(out_node_old[0])
+              
+            self.muts += 1
+    
+    def fire(self, iters):
         """
         Fires every node in the graph.
 
@@ -158,22 +181,10 @@ class Network:
             neigh = list(self.adjL[i])
 
             if len(neigh) > 0:
-                self.astates[neigh] += self.fireweight
-
-    def fire(self, node):
-        """
-        Fires a specific node
-
-        Parameters:
-            :int node:          The node being fired.
-
-        Returns:
-            None
-        """
-        neigh = list(self.adjL[node])
-
-        if (len(neigh) > 0):
-            self.astates[neigh] += self.fireweight
+                if iters == 50: #the first time the network fires it is a bigger signal
+                    self.astates[neigh] += self.threshold
+                else:
+                    self.astates[neigh] += 20
 
     def initialize(self, nprop = .1, avk = 1):
         """
@@ -195,7 +206,16 @@ class Network:
             for node in nodes:
                 nedges = int(np.random.lognormal(avk))
                 self.add_edges(node, nedges)
+                
+        else: #create random network but with communities
+            
+            tot_num_edges = (len(self.communities[0]) * (len(self.communities[0])-1)) * len(self.communities)
+            
+            for node in self.nodes:
+                for _ in range(int(tot_num_edges/len(self.nodes))):
+                    self.add_edges(node, 1)
 
+        '''        
         # If community based, connect all communities
         else: 
             # For each community
@@ -206,15 +226,79 @@ class Network:
 
                     # Connect it to every other node within the community
                     self.adjL[i[j]].update(np.delete(i, j))
+        '''
 
     def evaluate(self):
-        """
+        
+        if (self.comshape != None):
+        
+            # Set all states as not firing
+            self.fireworthy = np.array([False] * (self.N ** 2))
+            
+            # Set certain community as firing
+            #self.fireworthy[self.communities[np.random.randint(len(self.communities))]] = True
+            self.fireworthy[self.communities[0]] = True
 
-        A tomorrow problem.
+            props = []
 
-        """
+            iters = 50 # measuring fitness after 50 iterations
+            while iters > 0: #and len(np.where(self.fireworthy == True)[0]) > 0:
+                # Update activity states
+                self.fire(iters)
+                #print("fired")
 
-        pass
+                # Save all nodes that will fire
+                firing = np.where(self.astates >= self.threshold)[0]
+
+                # Find proportion of nodes that fire
+                prop = len(firing) / self.N ** 2
+                props.append(prop)
+
+                # Reset firing states, keep those that are > threshold
+                self.fireworthy = np.array([False] * (self.N ** 2))
+                self.fireworthy[np.where(self.astates >= self.threshold)] = True
+                self.astates = np.zeros(self.N ** 2)
+
+                iters -= 1
+
+            my_set_f = set(firing)
+            comm_fired = 0 #number of communities where all nodes fired
+            for c in self.communities:
+                my_set_comm = set(c)
+                comm_f = my_set_f.intersection(my_set_comm) #communities and firing intersection
+                if len(comm_f) == len(my_set_comm):
+                    comm_fired += 1
+    
+
+            self.fitness = np.average(props) + comm_fired
+        
+        else:
+            # Set all states as not firing
+            self.fireworthy = np.array([True] * (self.N ** 2))
+
+            props = []
+
+            iters = 50 # measuring fitness after 50 iterations
+            while iters > 0: #and len(np.where(self.fireworthy == True)[0]) > 0:
+                # Update activity states
+                self.fire(iters)
+                #print("fired")
+
+                # Save all nodes that will fire
+                firing = np.where(self.astates >= self.threshold)[0]
+
+                # Find proportion of nodes that fire
+                prop = len(firing) / self.N ** 2
+                props.append(prop)
+
+                # Reset firing states, keep those that are > threshold
+                self.fireworthy = np.array([False] * (self.N ** 2))
+                self.fireworthy[np.where(self.astates >= self.threshold)] = True
+                self.astates = np.zeros(self.N ** 2)
+
+                iters -= 1
+
+            self.fitness = np.average(props)
 
 
     ### Visualization methods:
@@ -380,3 +464,41 @@ def compute_gaussian_weights(W,node,adjL):
         gauss[i][j] = 0
     gauss = gauss / gauss.sum() # normalize everything to make sure we have probabilities
     return gauss.flatten() # flatten them to use with np.random.choice
+
+'''
+    def fire(self, node):
+        """
+        Fires a specific node
+
+        Parameters:
+            :int node:          The node being fired.
+
+        Returns:
+            None
+        """
+        neigh = list(self.adjL[node])
+
+        if (len(neigh) > 0):
+            self.astates[neigh] += self.fireweight
+            
+def spike(self):
+        """
+        Fires every node in the graph.
+
+        Parameters:
+            None
+
+        Returns:
+            None
+        """
+
+        # For each item being fired
+        firing = np.where(self.fireworthy == True)[0]
+        for i in firing:
+
+            # Find all neighbors and increment activity state += 20
+            neigh = list(self.adjL[i])
+
+            if len(neigh) > 0:
+                self.astates[neigh] += self.fireweight   
+''' 

@@ -72,7 +72,7 @@ class Population:
         for i in self.population:
 
             # Initialize / populate them.
-            i.populate(av_k)
+            i.initialize(av_k)
 
     def mutate(self):
         """
