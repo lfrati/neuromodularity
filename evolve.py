@@ -208,47 +208,17 @@ def genetic(parents, tstep, save):
 
 ### Driver and examples
 
-#  Gaussian, no communities
-#parents = Population(
-    #popsize= 1, 
-    #indsize=10, 
-    #stype="gauss", 
-    #locality=0.1, 
-    #threshold=100,
-    #comshape = None)
+kwargs = {'ID':0,
+        'com_side':3, 
+        'coms_per_side':3, 
+        'threshold':100, 
+        'fireweight':20, 
+        'stype':'gaussian', 
+        'popsize':10, 
+        'net_type':'strict_com', 
+        'locality':0.5}
 
-# Uniform, no communities
+parents = Population(**kwargs)
+parents.initialize()
 
-# parents = Population(
-#     popsize= 100, 
-#     indsize=10, 
-#     dist="uniform", 
-#     locality=0.5, 
-#     threshold=200,
-#     comshape = None)
-
-# Gaussian, with 3 communities of side-length 3 per network grid side
-
-parents = Population(
-     popsize= 1, 
-     indsize=9, 
-     dist="gauss", 
-     locality=0.5, 
-     threshold=160,
-     comshape = (3,3))
-
-# Uniform, with communities!
-
-# parents = Population(
-#     popsize= 100, 
-#     indsize=10, 
-#     dist="uniform", 
-#     locality=0.5, 
-#     threshold=200,
-#     comshape = (3,3))
-
-### Uniform / gaussian, community / non-community edge-addition and 
-# sampling methods are determined automatically on initialization.
-
-parents.initialize(av_k = 1)
-hillclimb(parents, 10000, False)
+hillclimb(parents, 100, False)

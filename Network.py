@@ -13,111 +13,71 @@ import random
 import numpy as np 
 import pandas as pd 
 import networkx as nx 
-
-import matplotlib.pyplot as plt 
+from abc import ABC, abstractmethod
 
 from scipy.stats import norm
+import matplotlib.pyplot as plt 
 
-class Network:
+class Network(ABC):
     """
-    The core network class.
-
-    Attributes:
-
+    Abstract class for networks of different varieties.
     """
 
-    def __init__(self, **kwargs):
+    ### Abstract methods
+
+    @abstractmethod
+    def mutate(self, node):
         """
-        Constructor for network object.
-
-        Parameters:
-            :int N:             Side length of adjM of the network.
-            :int threshold:     The threshold of firing nodes within the network
-            :int fireweight:    Strength of a node firing.
-            :str stype:         Sampling type (gaussian or uniform)
-
-            :float locality:    Locality used in guassian / local sampling.
-            :tuple comshape:    Community shape in set-community networks.
-
-        Returns:
-            None (constructor)
+        Should make a single change to a single node / edge with respect
+        to the type of network.
         """
+        pass 
 
-        # Set some defaults
-        kwargs.setdefault("N", 10)
-        kwargs.setdefault("threshold", 100)
-        kwargs.setdefault("fireweight", 20)
-        kwargs.setdefault("stype", "gaussian")
-        kwargs.setdefault("locality", 0.25)
-        kwargs.setdefault("comshape", None)
+    @abstractmethod
+    def initialize(self):
+        """
+        Should somehow initialize the network.
+        """
+        pass 
 
-        self.__dict__.update(kwargs)
+    @abstractmethod
+    def evaluate(self):
+        """
+        Should determine the fitness of the network.
+        """
+        pass 
 
-        kwargs.setdefault("mweights", make_master_weights(self.N, self.locality))
-
-        self.__dict__.update(kwargs)
-
-        # Determine whether community structure exists:
-        if (self.comshape  != None):
-            self.communities = make_communities(self.comshape[0], 
-                self.comshape[1])
-            
-            if (self.N != self.comshape[0] * self.comshape[1]):
-                print("Overriding expected N value.")
-                self.N = self.comshape[0] * self.comshape[1]
-
-        # Determine core network attributes
-        self.adjL = {key: set() for key in np.arange(self.N ** 2)}
-        self.nodes = np.arange(self.N ** 2)
-
-        self.astates = np.zeros(self.N ** 2)
-        self.fireworthy = np.tile(False, self.N ** 2)
-
-        self.age = 0
-        self.muts = 0
-        self.fitness = 0
-
-        # Determine weights for sampling methods
-        if (self.stype == "gaussian"):
-            marginals = normal_marginals(self.N, self.locality)
-            self.weights = gen_gauss_weights(marginals)
-            self.original_weights = np.copy(self.weights)
-
-        elif (self.stype == "uniform"):
-            self.weights = gen_unif_weights(self.N)
-            self.original_weights = np.copy(self.weights)
-            
+    ### Concrete methods
 
     def add_edges(self, node, num):
         """
-        Add edges certain number of edges to a network according to that
-        network's selection scheme (stype).
+        Adds edges to a node according to the sampling type.
 
         Parameters:
-            :int node:          The node having edges added.
-            :int num:           The number of edges being added to that node.
+            :int node:          The node having edges added to it.
+            :int num:           The number of edges added.
 
         Returns:
-            None (modifies adjL)
+            None
         """
 
+        # Find number of samples available.
         num_samples = min(num, self.N - 1 - len(self.adjL[node]))
 
         if (self.stype == "gaussian"):
-
             subset = compute_gaussian_weights(self.mweights, node, self.adjL)
 
             samples = np.random.choice(
                 a = self.nodes,
                 p = subset,
                 replace = False,
-                size = num
-            )
+                size = num)
 
             self.adjL[node].update(samples)
 
         elif (self.stype == "uniform"):
-            availableNodes = list(set(self.nodes) - self.adjL[node])
+
+            available_nodes = list(set(self.nodes) - self.adjL[node])
             samples = np.random.choice(
                 a = availableNodes, 
                 replace = False, 
@@ -125,47 +85,10 @@ class Network:
 
             self.adjL[node].update(samples)
 
-    def mutate(self):
+    def fire(self):
         """
-        A simple wrapper for add_edges: It chooses a random node and 
-        performs a sample on it. Used in evolution.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
+        Fires nodes in network with respect to their existing activity state.
         
-        if (self.comshape == None):
-            # Add a single edge to a random node, increment age
-            node = random.randrange(0, self.N ** 2)
-            self.add_edges(node, 1) 
-            self.muts += 1
-        else:
-            #Mutation happens by both adding and removing an edge of a chosen node (i.e. rewiring)
-
-            # Add a single edge to a random node, increment age
-            node = random.randrange(0, self.N ** 2)
-            out_node_old = random.sample(self.adjL[node],1)
-
-
-            # sample new destination before undoing the old one to avoid re-picking it
-            self.add_edges(node, 1)
-
-
-            #self.weights[node][sample] = 0 put back original weight
-            self.weights[node][out_node_old] = self.original_weights[node][out_node_old]
-
-            # self.adjL[node].add(sample)
-            self.adjL[node].discard(out_node_old[0])
-              
-            self.muts += 1
-    
-    def fire(self, iters):
-        """
-        Fires every node in the graph.
-
         Parameters:
             None
 
@@ -177,133 +100,62 @@ class Network:
         firing = np.where(self.fireworthy == True)[0]
         for i in firing:
 
-            # Find all neighbors and increment activity state += 20
+            # Find all neighbors and increment activity state by fireweight
             neigh = list(self.adjL[i])
 
-            if len(neigh) > 0:
-                if iters == 50: #the first time the network fires it is a bigger signal
-                    self.astates[neigh] += self.threshold
-                else:
-                    self.astates[neigh] += 20
+            if (len(neigh) > 0):
+                self.astates[neigh] += self.fireweight
 
-    def initialize(self, nprop = .1, avk = 1):
+    def firenode(self, node):
         """
-        Initializes a subset of the network with nodes of an average degree.
+        Fires a single node in the network.
 
-        Paramaters:
-            :float nprop:       Proportion of network starting with edges.
-            :int avk:           Average degree of nodes starting with edges.
+        Parameters: 
+            :int node:          The node being fired.
+
+        Returns:
+            None
+        """
+
+        self.astates[list(self.adjL[node])] += self.fireweight
+
+    def spike(self):
+        """
+        Fires all nodes in the network without regard for their existing states.
+
+        Parameters:
+            None
+
+        Returns:
+            None
+        """
+
+        for i in self.adjL.keys():
+
+            # Find all neighbors and increment activity state by fireweight
+            neigh = list(self.adjL[i])
+
+            if (len(neigh) > 0):
+                self.astates[neigh] += self.fireweight
+
+    def update_states(self):
+        """
+        Updates the states of each node.
+
+        Parameters:
+            None
 
         Return:
             None
         """
 
-        # If non-community based, randomly initialize
-        if (self.comshape == None):
-            nodes = np.random.choice(self.nodes, 
-                size = int(len(self.nodes) * nprop))
-
-            for node in nodes:
-                nedges = int(np.random.lognormal(avk))
-                self.add_edges(node, nedges)
-                
-        else: #create random network but with communities
-            
-            tot_num_edges = (len(self.communities[0]) * (len(self.communities[0])-1)) * len(self.communities)
-            
-            for node in self.nodes:
-                for _ in range(int(tot_num_edges/len(self.nodes))):
-                    self.add_edges(node, 1)
-
-        '''        
-        # If community based, connect all communities
-        else: 
-            # For each community
-            for i in self.communities:
-
-                # For each node within that community
-                for j in range(len(i)):
-
-                    # Connect it to every other node within the community
-                    self.adjL[i[j]].update(np.delete(i, j))
-        '''
-
-    def evaluate(self):
-        
-        if (self.comshape != None):
-        
-            # Set all states as not firing
-            self.fireworthy = np.array([False] * (self.N ** 2))
-            
-            # Set certain community as firing
-            #self.fireworthy[self.communities[np.random.randint(len(self.communities))]] = True
-            self.fireworthy[self.communities[0]] = True
-
-            props = []
-
-            iters = 50 # measuring fitness after 50 iterations
-            while iters > 0: #and len(np.where(self.fireworthy == True)[0]) > 0:
-                # Update activity states
-                self.fire(iters)
-                #print("fired")
-
-                # Save all nodes that will fire
-                firing = np.where(self.astates >= self.threshold)[0]
-
-                # Find proportion of nodes that fire
-                prop = len(firing) / self.N ** 2
-                props.append(prop)
-
-                # Reset firing states, keep those that are > threshold
-                self.fireworthy = np.array([False] * (self.N ** 2))
-                self.fireworthy[np.where(self.astates >= self.threshold)] = True
-                self.astates = np.zeros(self.N ** 2)
-
-                iters -= 1
-
-            my_set_f = set(firing)
-            comm_fired = 0 #number of communities where all nodes fired
-            for c in self.communities:
-                my_set_comm = set(c)
-                comm_f = my_set_f.intersection(my_set_comm) #communities and firing intersection
-                if len(comm_f) == len(my_set_comm):
-                    comm_fired += 1
-    
-
-            self.fitness = np.average(props) + comm_fired
-        
-        else:
-            # Set all states as not firing
-            self.fireworthy = np.array([True] * (self.N ** 2))
-
-            props = []
-
-            iters = 50 # measuring fitness after 50 iterations
-            while iters > 0: #and len(np.where(self.fireworthy == True)[0]) > 0:
-                # Update activity states
-                self.fire(iters)
-                #print("fired")
-
-                # Save all nodes that will fire
-                firing = np.where(self.astates >= self.threshold)[0]
-
-                # Find proportion of nodes that fire
-                prop = len(firing) / self.N ** 2
-                props.append(prop)
-
-                # Reset firing states, keep those that are > threshold
-                self.fireworthy = np.array([False] * (self.N ** 2))
-                self.fireworthy[np.where(self.astates >= self.threshold)] = True
-                self.astates = np.zeros(self.N ** 2)
-
-                iters -= 1
-
-            self.fitness = np.average(props)
+        to_fire = np.where(self.astates > self.threshold)
+        self.astates = np.zeros(self.N ** 2)
+        self.fireworthy = np.tile(False, self.N ** 2)
+        self.fireworthy[to_fire] = True
 
 
-    ### Visualization methods:
-
-    def show_grid(self, size=10, labels=True):
+    def show_grid(self, labels, size):
         """
         Visualizes whole network grid using networkx.
 
@@ -338,8 +190,402 @@ class Network:
         g.add_nodes_from(mapping.keys())
         g.add_edges_from(edges)
         plt.figure(figsize=(16, 16))
-        nx.draw(g, with_labels=labels, pos=pos, node_size=size)
+        nx.draw(g, with_labels= labels, pos=pos, node_size=size)
         plt.show()
+
+
+### MAIN NETWORKING CLASSES
+
+
+class NoCommunity(Network):
+    """
+    Creates a network without any community structure.
+
+    The key idea behind a non-community network is that it can grow;
+    new edges can be added as opposed to existing edges being changed.
+    """
+
+    def __init__(self, ID, N, threshold, fireweight, stype, mweights, **kwargs):
+        """
+        Initializes network with no community firing structure
+
+        Parameters:
+            :int ID:            Unique ID of that network.
+            :int N:             Side length of network.
+            :int threshold:     Input required for a node to fire.
+            :int fireweight:    Output of a single node
+            :str stype: The sampling type used (gaussian, uniform)
+            :list mweights:     Master weights matrix used for sampling.
+
+        Returns:
+            None (constructor)
+        """
+
+        # Network function params
+        self.N = N
+        self.threshold = threshold 
+        self.fireweight = fireweight
+        self.stype = stype
+        self.mweights = mweights
+
+        self.nodes = np.arange(self.N ** 2)
+        self.adjL = {key: set() for key in np.arange(self.N ** 2)}
+        self.astates = np.zeros(self.N ** 2)
+        self.fireworthy = np.tile(False, self.N ** 2)
+
+        # Evolutionary params
+        self.ID = ID
+        self.age = 0
+        self.fitness = 0
+        self.mutations = 0
+
+    def comspike(self, com = None):
+        """
+        Fires all the nodes in a community ignoring their activity
+        state. Essentially a community-specific spike.
+
+        Parameters:
+            :int com:       Index of the com to spike. Default of random.
+
+        Returns:
+            None
+        """
+
+        if (com == None):
+            com = random.randrange(len(self.communities))
+
+        for i in self.communities[com]:
+            self.firenode(i)
+
+
+    def mutate(self, node = None):
+        """
+        Mutation accomplished adding a single edge somewhere.
+
+        Parameters:
+            :int node:          The node being selected, Random by default.
+
+        Returns:
+            None (changes adjL)
+        """
+        if (node == None):
+            node = random.randrange(self.N ** 2)
+
+        self.add_edges(node, 1)
+
+    def initialize(self, k, num):
+        """
+        Randomly seeds the network with num nodes each creating
+        an average of av_k edges.
+
+        Parameters:
+            :int k:             Degree of node.
+            :int num:           Number of nodes being initialized.
+        """
+
+        nodes = random.sample(self.nodes, num, replace=False)
+
+        for i in nodes:
+            self.add_edges(i,k)
+
+    def evaluate(self):
+        """
+        To be determined.
+        """
+
+class GaussianCommunity(Network):
+    """
+    Creates a community network that is initialized with a broader, Gaussian 
+    sampling method. The underlying network communities are still strict, but
+    the actual sampling of nodes within does not lead to isolated, fully connected
+    communities.
+    """
+
+    def __init__(self, ID, com_side, coms_per_side, threshold, fireweight, stype, mweights, **kwargs):
+        """
+        Initializes GaussianCommunity. Number of nodes is determined by the size of
+        the communities and how many there are per side of the network.
+
+        Parameters:
+            :int com_side:          The length of one side of a community.
+            :int coms_per_side:     How many communities there are per side of a network.
+            :int threshold:         Input required for a single node to fire.
+            :int fireweight:        Output of a fired single node.
+            :str stype:             The sampling type (gaussian, uniform)
+            :list mweights:         Master weight sampling matrix.
+
+        Returns:
+            None (constructor)
+        """
+
+         # Network function params
+        self.N = com_side * coms_per_side
+        self.com_side = com_side
+        self.coms_per_side = coms_per_side
+        self.threshold = threshold 
+        self.fireweight = fireweight
+        self.stype = stype
+        self.mweights = mweights
+
+        self.nodes = np.arange(self.N ** 2)
+        self.adjL = {key: set() for key in np.arange(self.N ** 2)}
+        self.astates = np.zeros(self.N ** 2)
+        self.fireworthy = np.tile(False, self.N ** 2)
+        self.communities = make_communities(com_side, coms_per_side)
+
+        # Evolutionary params
+        self.ID = ID
+        self.age = 0
+        self.fitness = 0
+        self.mutations = 0
+
+        if (mweights.shape[0] != (self.N * 2) + 1):
+            print(mweights.shape)
+            print(self.N)
+            print("Your community size does not match your master weights!")
+            raise
+
+    def comspike(self, com = None):
+        """
+        Fires all the nodes in a community ignoring their activity
+        state. Essentially a community-specific spike.
+
+        Parameters:
+            :int com:       Index of the com to spike. Default of random.
+
+        Returns:
+            None
+        """
+
+        if (com == None):
+            com = random.randrange(len(self.communities))
+
+        for i in self.communities[com]:
+            self.firenode(i)
+
+
+    def mutate(self, node = None):
+        """
+        Mutations add an edge, but only at the expense of an existing edge.
+
+        Parameters:
+            :int node:          The node that is losing an edge. Random by def.
+
+        Returns:
+            None
+        """
+
+        if (node == None):
+            node = random.randrange(self.N ** 2)
+
+        # Delete random edge from adjL for that node.
+        self.adjL[node].discard(random.randrange(len(self.adjL[node])))
+
+        # Choose a new random node and give it a sampled edge.
+        new = random.randrange(self.N ** 2)
+        self.add_edges(new, 1)
+
+
+    def initialize(self):
+        """
+        Initialize the network with the number of edges it would take to 
+        make fully connected communities (e.g. each node connects to 
+        com_side ** 2 - 1 nodes). However, this connection is done using
+        local Gaussian sampling.
+
+        Parameters:
+            None
+
+        Returns:
+            None
+        """
+
+        edges = (self.com_side ** 2) - 1
+
+        for i in self.communities:
+            for j in i:
+                self.add_edges(j, edges)
+
+    def evaluate(self):
+
+        # Start with spiking all nodes in a community
+        self.comspike()
+        self.update_states()
+
+        # Find initial firing nodes
+        total_fires = np.where(self.fireworthy == True)
+
+        iters = 50
+        while(iters != 0 and True in self.fireworthy):
+            print(iters)
+            self.fire()
+            self.update_states()
+
+            total_fires = np.append(total_fires, np.where(self.fireworthy == True))
+
+            iters -= 1
+
+        # Calculate fitness based on proportion of total firing nodes & coms
+        prop_fired = len(total_fires) / (self.N ** 2 * 50)
+
+        my_set_f = set(list(total_fires))
+        for c in self.communities:
+
+            #number of communities where all nodes fired
+            comm_fired = 0 
+            for c in self.communities:
+                my_set_comm = set(c)
+
+                #communities and firing intersection
+                comm_f = my_set_f.intersection(my_set_comm) 
+                if len(comm_f) == len(my_set_comm):
+                    comm_fired += 1
+
+        self.fitness = np.average(prop_fired) + comm_fired
+
+class StrictCommunity(Network):
+
+    def __init__(self, ID, com_side, coms_per_side, threshold, fireweight, stype, mweights, **kwargs):
+        """
+        Initializes StrictCommunity. Number of nodes is determined by the size of
+        the communities and how many there are per side of the network. 
+
+        Similar to Gaussian community, but initialization is accomplished by connecting each
+        node in a community to each other.
+
+        Parameters:
+            :int com_side:          The length of one side of a community.
+            :int coms_per_side:     How many communities there are per side of a network.
+            :int threshold:         Input required for a single node to fire.
+            :int fireweight:        Output of a fired single node.
+            :str stype:             The sampling type (gaussian, uniform)
+            :list mweights:         Master weight sampling matrix.
+
+        Returns:
+            None (constructor)
+        """
+
+         # Network function params
+        self.N = com_side * coms_per_side
+        self.com_side = com_side
+        self.coms_per_side = coms_per_side
+        self.threshold = threshold 
+        self.fireweight = fireweight
+        self.stype = stype
+        self.mweights = mweights
+
+        self.nodes = np.arange(self.N ** 2)
+        self.adjL = {key: set() for key in np.arange(self.N ** 2)}
+        self.astates = np.zeros(self.N ** 2)
+        self.fireworthy = np.tile(False, self.N ** 2)
+        self.communities = make_communities(com_side, coms_per_side)
+
+        # Evolutionary params
+        self.ID = ID
+        self.age = 0
+        self.fitness = 0
+        self.mutations = 0
+
+        if (mweights.shape[0] != (self.N * 2) + 1):
+            print(mweights.shape)
+            print(self.N)
+            print("Your community size does not match your master weights!")
+            raise
+
+    def comspike(self, com = None):
+        """
+        Fires all the nodes in a community ignoring their activity
+        state. Essentially a community-specific spike.
+
+        Parameters:
+            :int com:       Index of the com to spike. Default of random.
+
+        Returns:
+            None
+        """
+
+        if (com == None):
+            com = random.randrange(len(self.communities))
+
+        for i in self.communities[com]:
+            self.firenode(i)
+
+    def mutate(self, node = None):
+        """
+        Mutations add an edge, but only at the expense of an existing edge.
+
+        Parameters:
+            :int node:          The node that is losing an edge. Random by def.
+
+        Returns:
+            None
+        """
+
+        if (node == None):
+            node = random.randrange(self.N ** 2)
+
+        # Delete random edge from adjL for that node.
+        self.adjL[node].discard(random.randrange(len(self.adjL[node])))
+
+        # Choose a new random node and give it a sampled edge.
+        new = random.randrange(self.N ** 2)
+        self.add_edges(new, 1)
+
+    def initialize(self):
+        """
+        Initializes network by connecting all nodes within isolated 
+        communities.
+
+        Parameters:
+            None
+
+        Returns:
+            None
+        """
+
+        for i in self.communities:
+
+            # For each node within that community
+            for j in range(len(i)):
+
+                # Connect it to every other node within the community
+                self.adjL[i[j]].update(np.delete(i, j))
+
+    def evaluate(self):
+        
+        # Start with spiking all nodes in a community.
+        self.comspike()
+        self.update_states()
+
+        # Find initial firing nodes
+        total_fires = np.where(self.fireworthy == True)
+
+        iters = 50
+        while(iters != 0 and True in self.fireworthy):
+            self.fire()
+            self.update_states()
+
+            total_fires = np.append(total_fires, np.where(self.fireworthy == True))
+
+            iters -= 1
+
+        # Calculate fitness based on proportion of total firing nodes & coms
+        prop_fired = len(total_fires) / (self.N ** 2 * 50)
+
+        my_set_f = set(list(total_fires))
+        for c in self.communities:
+
+            #number of communities where all nodes fired
+            comm_fired = 0 
+            for c in self.communities:
+                my_set_comm = set(c)
+
+                #communities and firing intersection
+                comm_f = my_set_f.intersection(my_set_comm) 
+                if len(comm_f) == len(my_set_comm):
+                    comm_fired += 1
+
+        self.fitness = np.average(prop_fired) + comm_fired
 
 ### HELPER FUNCTIONS ###
 
@@ -392,7 +638,7 @@ def make_communities(community_side, communities_per_side):
                     community.append(_id)
                 # print("- ", end="")
             communities.append(community)
-    return communities
+    return np.array(communities)
 
 def normal_marginals(side_len, locality):
     rv = norm(loc=0, scale=locality)
@@ -464,41 +710,3 @@ def compute_gaussian_weights(W,node,adjL):
         gauss[i][j] = 0
     gauss = gauss / gauss.sum() # normalize everything to make sure we have probabilities
     return gauss.flatten() # flatten them to use with np.random.choice
-
-'''
-    def fire(self, node):
-        """
-        Fires a specific node
-
-        Parameters:
-            :int node:          The node being fired.
-
-        Returns:
-            None
-        """
-        neigh = list(self.adjL[node])
-
-        if (len(neigh) > 0):
-            self.astates[neigh] += self.fireweight
-            
-def spike(self):
-        """
-        Fires every node in the graph.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
-
-        # For each item being fired
-        firing = np.where(self.fireworthy == True)[0]
-        for i in firing:
-
-            # Find all neighbors and increment activity state += 20
-            neigh = list(self.adjL[i])
-
-            if len(neigh) > 0:
-                self.astates[neigh] += self.fireweight   
-''' 

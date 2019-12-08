@@ -13,56 +13,66 @@ class Population:
     This will take advantage of a basic mutation / selection scheme.
     """
 
-    def __init__(self, **kwargs):
-        """
-        Initializes a list of networks of a given size, distribution,
-        and locality. 
-
+    def __init__(self, net_type, popsize, locality,  **kwargs):
+        """ 
+        Creates networks of a given type based on key word arguments.
+    
         Parameters:
-            :int size:          Number of inviduals in the population.
-            :int indsize:       Size of networks.
-            :int fireweight:    How strong a firing node is.
-            :str stype:         The distribution of the networks
-            :float locality:    The locality of the networks
-            :int threshold:     The threshold of the networks.
-            :tuple comshape:    Community shape. Com size * coms per side
-            :list mweights:     Sampling matrix.
+            :str net_type:      Specifies the type of network in the pop.
 
         Returns:
             None. Costructor method.
         """
+        self.net_type = net_type
+        self.popsize = popsize
+        self.locality = locality
 
-        # Set some defaults
-        kwargs.setdefault('popsize', 10)
-        kwargs.setdefault('indsize', 10)
-        kwargs.setdefault('stype', 'gaussian')
-        kwargs.setdefault('locality', 0.25)
-        kwargs.setdefault('threshold',100)
-        kwargs.setdefault('comshape', None)
-        kwargs.setdefault('fireweight', 20)
+        self.last_id = 0
+        self.population = []
 
-        self.__dict__.update(kwargs)
+        self.__dict__.update(**kwargs)
 
-        kwargs.setdefault('mweights',make_master_weights(self.indsize, self.locality))
+        if (net_type == "no_com"):
+            self.population = [NoCommunity(**kwargs) for i in range(popsize)]
 
-        self.__dict__.update(kwargs)
+        elif (net_type == 'gaussian_com'):
+            try:
+                # Create weights and pass to network.
+                self.mweights = make_master_weights(self.com_side * self.coms_per_side,
+                    self.locality)
+                kwargs.update({'mweights':self.mweights, 'locality':self.locality})
 
-        self.population = [Network(
-            N = self.indsize, 
-            dist = self.stype, 
-            locality = self.locality,
-            threshold = self.threshold,
-            comshape = self.comshape,
-            fireweight = self.fireweight,
-            mweights = self.mweights) 
-        for _ in range(self.popsize)]
+                for i in range(self.popsize):
+                    kwargs.update({'ID':self.last_id})
+                    self.population.append(GaussianCommunity(**kwargs))
+                    self.last_id += 1
 
-    def initialize(self, av_k):
+            except:
+                print("Issue with initializing network. Kwargs:")
+                print(kwargs)
+
+        elif (net_type == 'strict_com'):
+            try:
+                # Create weights and pass to network.
+                self.mweights = make_master_weights(self.com_side * self.coms_per_side,
+                    self.locality)
+                kwargs.update({'mweights':self.mweights, 'locality':self.locality})
+
+                for i in range(self.popsize):
+                    kwargs.update({'ID':self.last_id})
+                    self.population.append(GaussianCommunity(**kwargs))
+                    self.last_id += 1
+
+            except:
+                print("Issue with initializing network. Kwargs:")
+                print(kwargs)
+
+    def initialize(self):
         """
         Fills empty networks in population with initial connections.
 
         Parameters:
-            :int av_k:          Average degree of each node.
+            None
 
         Returns:
             None.
@@ -72,7 +82,7 @@ class Population:
         for i in self.population:
 
             # Initialize / populate them.
-            i.initialize(av_k)
+            i.initialize()
 
     def mutate(self):
         """
@@ -90,7 +100,7 @@ class Population:
         for i in self.population:
 
             # Mutate them
-            i.mutate()
+            i.mutate(node = None)
 
     def evaluate(self):
         """
