@@ -60,7 +60,7 @@ class Population:
 
                 for i in range(self.popsize):
                     kwargs.update({'ID':self.last_id})
-                    self.population.append(GaussianCommunity(**kwargs))
+                    self.population.append(StrictCommunity(**kwargs))
                     self.last_id += 1
 
             except:

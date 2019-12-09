@@ -136,7 +136,7 @@ class Network(ABC):
             neigh = list(self.adjL[i])
 
             if (len(neigh) > 0):
-                self.astates[neigh] += self.fireweight
+                self.astates[neigh] += self.threshold
 
     def update_states(self):
         """
@@ -149,7 +149,7 @@ class Network(ABC):
             None
         """
 
-        to_fire = np.where(self.astates > self.threshold)
+        to_fire = np.where(self.astates >= self.threshold)
         self.astates = np.zeros(self.N ** 2)
         self.fireworthy = np.tile(False, self.N ** 2)
         self.fireworthy[to_fire] = True
@@ -361,7 +361,7 @@ class GaussianCommunity(Network):
             com = random.randrange(len(self.communities))
 
         for i in self.communities[com]:
-            self.firenode(i)
+            self.astates[i] = self.threshold
 
 
     def mutate(self, node = None):
@@ -407,41 +407,39 @@ class GaussianCommunity(Network):
                 self.add_edges(j, edges)
 
     def evaluate(self):
-
-        # Start with spiking all nodes in a community
+        
+        # Start with spiking all nodes in a community.
         self.comspike()
         self.update_states()
 
-        # Find initial firing nodes
+        # Find initial firing nodes, firing communities
+        # Communities start at 1 because of spike.
+        comcount = 1
         total_fires = np.where(self.fireworthy == True)
 
-        iters = 50
+        iters = 49
         while(iters != 0 and True in self.fireworthy):
-            print(iters)
             self.fire()
             self.update_states()
 
-            total_fires = np.append(total_fires, np.where(self.fireworthy == True))
+            firing = np.array(np.where(self.fireworthy == True)).flatten()
+
+            total_fires = np.append(total_fires, firing)
+
+            for i in self.communities:
+                if (set(i).issubset(set(firing))):
+                    comcount += 1
 
             iters -= 1
 
         # Calculate fitness based on proportion of total firing nodes & coms
         prop_fired = len(total_fires) / (self.N ** 2 * 50)
 
-        my_set_f = set(list(total_fires))
-        for c in self.communities:
+        # Calculate fitness based on proportion of total community firings.
+        com_prop = comcount / ((self.coms_per_side ** 2) * 50)
 
-            #number of communities where all nodes fired
-            comm_fired = 0 
-            for c in self.communities:
-                my_set_comm = set(c)
-
-                #communities and firing intersection
-                comm_f = my_set_f.intersection(my_set_comm) 
-                if len(comm_f) == len(my_set_comm):
-                    comm_fired += 1
-
-        self.fitness = np.average(prop_fired) + comm_fired
+        # self.fitness = np.average(prop_fired) + comm_fired
+        self.fitness = np.average([prop_fired, com_prop])
 
 class StrictCommunity(Network):
 
@@ -508,7 +506,7 @@ class StrictCommunity(Network):
             com = random.randrange(len(self.communities))
 
         for i in self.communities[com]:
-            self.firenode(i)
+            self.astates[i] = self.threshold
 
     def mutate(self, node = None):
         """
@@ -557,35 +555,34 @@ class StrictCommunity(Network):
         self.comspike()
         self.update_states()
 
-        # Find initial firing nodes
+        # Find initial firing nodes, firing communities
+        # Communities start at 1 because of spike.
+        comcount = 1
         total_fires = np.where(self.fireworthy == True)
 
-        iters = 50
+        iters = 49
         while(iters != 0 and True in self.fireworthy):
             self.fire()
             self.update_states()
 
-            total_fires = np.append(total_fires, np.where(self.fireworthy == True))
+            firing = np.array(np.where(self.fireworthy == True)).flatten()
+
+            total_fires = np.append(total_fires, firing)
+
+            for i in self.communities:
+                if (set(i).issubset(set(firing))):
+                    comcount += 1
 
             iters -= 1
 
         # Calculate fitness based on proportion of total firing nodes & coms
         prop_fired = len(total_fires) / (self.N ** 2 * 50)
 
-        my_set_f = set(list(total_fires))
-        for c in self.communities:
+        # Calculate fitness based on proportion of total community firings.
+        com_prop = comcount / ((self.coms_per_side ** 2) * 50)
 
-            #number of communities where all nodes fired
-            comm_fired = 0 
-            for c in self.communities:
-                my_set_comm = set(c)
-
-                #communities and firing intersection
-                comm_f = my_set_f.intersection(my_set_comm) 
-                if len(comm_f) == len(my_set_comm):
-                    comm_fired += 1
-
-        self.fitness = np.average(prop_fired) + comm_fired
+        # self.fitness = np.average(prop_fired) + comm_fired
+        self.fitness = np.average([prop_fired, com_prop])
 
 ### HELPER FUNCTIONS ###
 
