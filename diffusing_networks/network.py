@@ -37,12 +37,33 @@ class Network:
         self.nodes = []
         # list of list of Nodes in each community
         self.communities = []
-        self.adjL = {}
+        self.adjL_in = {}
+        self.adjL_out = {}
 
         self.activity_history = []
         self.spiking_history = []
         self.current_activity = []
         self.current_spiking = []
+
+    def cheat(self):
+        self.nodes = [Node(ID, self) for ID in self.nodeIDs]
+        self.communities = [
+            [self.nodes[idx] for idx in ids] for ids in self.communityIDs
+        ]
+        for commID, comm in enumerate(self.communities):
+            for node in comm:
+                node.community = commID
+        self.adjL_in = {node: set() for node in self.nodeIDs}
+        self.adjL_out = {node: set() for node in self.nodeIDs}
+        for _from in self.nodes:
+            _fromID = _from.id
+            samples = [neigh for neigh in self.communityIDs[_from.community] if neigh != _fromID]
+            for _toID in samples:
+                self.adjL_in[_toID].add(_fromID)
+                self.adjL_out[_fromID].add(_toID)
+                
+        self.current_activity = np.zeros((self.N, self.N))
+        self.current_spiking = np.zeros((self.N, self.N))
 
     def initialize(self, numEdges):
         self.nodes = [Node(ID, self) for ID in self.nodeIDs]
@@ -52,18 +73,16 @@ class Network:
         for commID, comm in enumerate(self.communities):
             for node in comm:
                 node.community = commID
-        self.adjL = {node: set() for node in self.nodeIDs}
+        self.adjL_in = {node: set() for node in self.nodeIDs}
+        self.adjL_out = {node: set() for node in self.nodeIDs}
         for _fromID in range(self.numNodes):
-            weights = compute_gaussian_weights(self.W, _fromID, self.adjL)
+            weights = compute_gaussian_weights(self.W, _fromID, self.adjL_out)
             samples = np.random.choice(
                 self.nodeIDs, p=weights, replace=False, size=numEdges
             )
             for _toID in samples:
-                _from = self.nodes[_fromID]
-                _to = self.nodes[_toID]
-                self.adjL[_fromID].add(_toID)
-                _from._out.add(_to)
-                _to._in.add(_from)
+                self.adjL_in[_toID].add(_fromID)
+                self.adjL_out[_fromID].add(_toID)
         self.current_activity = np.zeros((self.N, self.N))
         self.current_spiking = np.zeros((self.N, self.N))
 
@@ -74,25 +93,25 @@ class Network:
             # look for weak nodes to help
             weights = np.copy(gossip.max() - gossip)
             weights = weights.flatten()
-            for neigh in self.adjL[node]:  # go through the neighs in the adjlist and zero them
+            for neigh in self.adjL_out[node]:  # go through the neighs in the adjlist and zero them
                 weights[neigh] = 0
             
             # we could have zeroed the only non-zero terms so we need to check again
             if weights.sum() > 0:
-                fat_gauss = compute_gaussian_weights(self.W_rewire, node, self.adjL)
+                fat_gauss = compute_gaussian_weights(self.W_rewire, node, self.adjL_out)
                 weights *= fat_gauss
                 weights /= weights.sum()
             else:
-                weights = compute_gaussian_weights(self.W, node, self.adjL)
+                weights = compute_gaussian_weights(self.W, node, self.adjL_out)
         else:
-            weights = compute_gaussian_weights(self.W, node, self.adjL)
+            weights = compute_gaussian_weights(self.W, node, self.adjL_out)
 
         sample = np.random.choice(self.nodeIDs, p=weights, replace=False, size=1)[0]
 
         return sample
 
     def to_networkx(self):
-        edges = {node: list(edges) for node, edges in self.adjL.items()}
+        edges = {node: list(edges) for node, edges in self.adjL_out.items()}
         return nx.DiGraph(edges)
 
     def show(self):
@@ -162,6 +181,9 @@ class Network:
         for _ in range(num_updates):
             # pick a node to optimze
             node = np.random.choice(self.nodes)
+            # we either rewire or trade edges, so we need at least one
+            if len(self.adjL_out[node.id]) <= 0:
+                continue
             spiking = self.current_spiking[id_to_coords(node.id,self.N)] == 1
             gossip = node.info
 
@@ -175,24 +197,24 @@ class Network:
                 weights = np.copy(gossip).flatten()
                 
             weights = weights.flatten()
-            for neigh in self.adjL[node.id]:  # go through the neighs in the adjlist and zero them
+            for neigh in self.adjL_out[node.id]:  # go through the neighs in the adjlist and zero them
                 weights[neigh] = 0
 
             # we could have zeroed the only non-zero terms so we need to check again
             if weights.sum() > 0:
-                fat_gauss = compute_gaussian_weights(self.W_rewire, node.id, self.adjL)
+                fat_gauss = compute_gaussian_weights(self.W_rewire, node.id, self.adjL_out)
                 tmp_weights = weights * fat_gauss # apply gaussian scaling, might zero everything
                 if tmp_weights.sum() > 0:
                     weights = tmp_weights
                 weights /= weights.sum() # normalize to prob
             else:
                 # we have no gossip to leverage, use the fat gaussian
-                weights = compute_gaussian_weights(self.W_rewire, node.id, self.adjL)
+                weights = compute_gaussian_weights(self.W_rewire, node.id, self.adjL_out)
             
             # new edge to be added
             new_edge = np.random.choice(self.nodeIDs, p=weights, replace=False, size=1)[0]
             # old edge to be removed
-            old_edge = random.sample(node._out, k=1)[0].id
+            old_edge = random.sample(self.adjL_out[node.id], k=1)[0]
 
             if spiking:
                 # we connect the current node to the new node (i.e. send signal)
@@ -204,33 +226,26 @@ class Network:
             
 
     def rewire(self, old_from: int, old_to: int, new_to: int, new_from: int):
-        # remove from adjL
-        self.adjL[old_from].discard(old_to)
-        # add new to adjL
-        self.adjL[new_from].add(new_to)
+        
+        # update outgoing edges
+        self.adjL_out[old_from].discard(old_to)
+        self.adjL_out[new_from].add(new_to)
 
-        # get nodes from IDs
-        old_from = self.nodes[old_from]
-        new_from = self.nodes[new_from]
-        old_to = self.nodes[old_to]
-        new_to = self.nodes[new_to]
-
-        # remove node from node.out[old].in
-        new_from._in.discard(old_from)
-        # remove old from node.out
-        old_from._out.discard(old_to)
-
-        # add new to node.out
-        new_from._out.add(new_to)
-        # add node to new.in
-        new_to._in.add(new_from)
+        # updated incoming edges
+        self.adjL_in[new_to].add(new_from)
+        self.adjL_in[old_to].discard(old_from)
+        
 
     def mu(self):
         within = 0
+        between = 0
         tot = 0
         for node in self.nodes:
-            for to in node._out:
-                if to.community == node.community:
+            for to in self.adjL_out[node.id]:
+
+                if self.nodes[to].community == node.community:
                     within += 1
+                else:
+                    between += 1
                 tot += 1
-        return within / tot
+        return between / tot

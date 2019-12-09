@@ -9,8 +9,6 @@ class Node:
         self.coords = id_to_coords(self.id, self.N)
         self.threshold = network.threshold
         self.activity = 0
-        self._out = set()
-        self._in = set()
         self.spiking = False
         self.network = network
         # current info, sent to neighbours while diffusing
@@ -48,7 +46,7 @@ class Node:
     def update(self):
         # if spiking signal neighbouring nodes
         if self.spiking:
-            [neigh.excite() for neigh in self._out]
+            [self.network.nodes[neigh].excite() for neigh in self.network.adjL_out[self.id]]
         self.spiking = False
         self.info = np.copy(self.new_info)
 
