@@ -13,8 +13,6 @@ import networkx as nx
 
 # you'll have to pip install these from 
 # https://zhiyzuo.github.io/python-modularity-maximization/
-from modularity_maximization import partition 
-from modularity_maximization.utils import get_modularity
 
 
 from Population import Population
@@ -43,12 +41,6 @@ def hillclimb(parents, tstep, save):
         # Find initial fitnesses,
         parents.evaluate()
         
-        # Find modularity of initial parent
-        adj_for_mod = parents.population[0].adjL
-        G=nx.DiGraph(adj_for_mod)
-        comm_dict = partition(G)
-        print(get_modularity(G, comm_dict))
-        
         while (tstep > 0):
 
             # Create mutant population by copying and mutating.
@@ -70,33 +62,28 @@ def hillclimb(parents, tstep, save):
             parents.population.sort(key=lambda x: x.fitness, reverse=True)
 
             # Save best performing at that timestep.
-            db = db.append({
-                "N":parents.population[0].N,
-                "Dist":parents.population[0].dist,
-                "Locality":parents.population[0].locality,
-                "Adjlist":parents.population[0].adjL,
-                "Threhold":parents.population[0].threshold,
-                "Comshape":parents.population[0].comshape
-                }, ignore_index=True)
+            # db = db.append({
+            #     "N":parents.population[0].N,
+            #     "Dist":parents.population[0].dist,
+            #     "Locality":parents.population[0].locality,
+            #     "Adjlist":parents.population[0].adjL,
+            #     "Threhold":parents.population[0].threshold,
+            #     "Comshape":parents.population[0].comshape
+            #     }, ignore_index=True)
 
             # Print some stats:
             avg_fit = np.average([i.fitness 
                 for i in parents.population])
 
-            avg_mut = np.average([i.muts 
-                for i in parents.population])
+            avg_mut = 0
+            # avg_mut = np.average([i.muts 
+            #     for i in parents.population])
 
             print("--- Timestep:", tstep, "|", "Avg Fit:", 
                 avg_fit, "|", "Avg Mut:", avg_mut, "---", end='\r')
 
             # Decrement
             tstep -= 1
-        
-        # Find modularity of last parent
-        adj_for_mod = parents.population[0].adjL
-        G=nx.DiGraph(adj_for_mod)
-        comm_dict = partition(G)
-        print(get_modularity(G, comm_dict))
 
         # Save database
         if (save):
@@ -149,15 +136,15 @@ def genetic(parents, tstep, save):
         # Rank parents, find probs:
         parents.population.sort(key=lambda x: x.fitness, reverse=True)
 
-        # Save best performing at that timestep.
-        db = db.append({
-            "N":parents.population[0].N,
-            "Dist":parents.population[0].dist,
-            "Locality":parents.population[0].locality,
-            "Adjlist":parents.population[0].adjL,
-            "Threhold":parents.population[0].threshold,
-            "Comshape":parents.population[0].comshape
-            }, ignore_index=True)
+        # # Save best performing at that timestep.
+        # db = db.append({
+        #     "N":parents.population[0].N,
+        #     "Dist":parents.population[0].dist,
+        #     "Locality":parents.population[0].locality,
+        #     "Adjlist":parents.population[0].adjL,
+        #     "Threhold":parents.population[0].threshold,
+        #     "Comshape":parents.population[0].comshape
+        #     }, ignore_index=True)
 
         # Find rank-prop probabilities
         
@@ -184,8 +171,9 @@ def genetic(parents, tstep, save):
         avg_fit = np.average([i.fitness 
             for i in parents.population])
 
-        avg_mut = np.average([i.muts 
-            for i in parents.population])
+        avg_mut = 0
+        # avg_mut = np.average([i.muts 
+        #     for i in parents.population])
 
         print("--- Timestep:", tstep, "|", "Avg Fit:", 
             avg_fit, "|", "Avg Mut:", avg_mut, "---")
@@ -208,47 +196,18 @@ def genetic(parents, tstep, save):
 
 ### Driver and examples
 
-#  Gaussian, no communities
-#parents = Population(
-    #popsize= 1, 
-    #indsize=10, 
-    #stype="gauss", 
-    #locality=0.1, 
-    #threshold=100,
-    #comshape = None)
+kwargs = {'ID':0,
+        'com_side':3, 
+        'coms_per_side':3, 
+        'threshold':140, 
+        'fireweight':20, 
+        'stype':'gaussian', 
+        'popsize':10, 
+        'net_type':'strict_com', 
+        'locality':0.25}
 
-# Uniform, no communities
+parents = Population(**kwargs)
+parents.initialize()
 
-# parents = Population(
-#     popsize= 100, 
-#     indsize=10, 
-#     dist="uniform", 
-#     locality=0.5, 
-#     threshold=200,
-#     comshape = None)
-
-# Gaussian, with 3 communities of side-length 3 per network grid side
-
-parents = Population(
-     popsize= 1, 
-     indsize=9, 
-     dist="gauss", 
-     locality=0.5, 
-     threshold=160,
-     comshape = (3,3))
-
-# Uniform, with communities!
-
-# parents = Population(
-#     popsize= 100, 
-#     indsize=10, 
-#     dist="uniform", 
-#     locality=0.5, 
-#     threshold=200,
-#     comshape = (3,3))
-
-### Uniform / gaussian, community / non-community edge-addition and 
-# sampling methods are determined automatically on initialization.
-
-parents.initialize(av_k = 1)
-hillclimb(parents, 10000, False)
+hillclimb(parents, 1000, False)
+parents.population[0].show_grid(True, 10)
