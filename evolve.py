@@ -41,6 +41,9 @@ def hillclimb(parents, tstep, save):
         # Find initial fitnesses,
         parents.evaluate()
         
+        mu_modularity = parents.mu_modularity(network_num = 0) #evaluates modularity of inidivual 0
+        print(mu_modularity)
+        
         while (tstep > 0):
 
             # Create mutant population by copying and mutating.
@@ -84,6 +87,9 @@ def hillclimb(parents, tstep, save):
 
             # Decrement
             tstep -= 1
+            
+        mu_modularity = parents.mu_modularity(network_num = 0) #evaluates modularity of inidivual 0
+        print(mu_modularity)
 
         # Save database
         if (save):
@@ -209,5 +215,5 @@ kwargs = {'ID':0,
 parents = Population(**kwargs)
 parents.initialize()
 
-hillclimb(parents, 1000, False)
+hillclimb(parents, 10000, False)
 parents.population[0].show_grid(True, 10)
