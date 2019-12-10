@@ -41,7 +41,8 @@ def hillclimb(parents, tstep, save):
         # Find initial fitnesses,
         parents.evaluate()
         
-        mu_modularity = parents.mu_modularity(network_num = 0) #evaluates modularity of inidivual 0
+        
+        mu_modularity = parents.mu_modularity(network_num = 0) #evaluates modularity of a representative inidivual (0)
         print(mu_modularity)
         
         while (tstep > 0):
@@ -87,9 +88,14 @@ def hillclimb(parents, tstep, save):
 
             # Decrement
             tstep -= 1
-            
-        mu_modularity = parents.mu_modularity(network_num = 0) #evaluates modularity of inidivual 0
-        print(mu_modularity)
+          
+        idx = 0
+        pop_mod = []
+        for parent in parents.population:
+            mu_modularity = parents.mu_modularity(network_num = idx) #evaluates modularity of inidivual 0
+            pop_mod.append(mu_modularity)
+            idx += 1
+        print(np.mean(pop_mod))
 
         # Save database
         if (save):
@@ -208,12 +214,12 @@ kwargs = {'ID':0,
         'threshold':140, 
         'fireweight':20, 
         'stype':'gaussian', 
-        'popsize':10, 
+        'popsize':100, 
         'net_type':'strict_com', 
         'locality':0.25}
 
 parents = Population(**kwargs)
 parents.initialize()
 
-hillclimb(parents, 10000, False)
+hillclimb(parents, 100, False)
 parents.population[0].show_grid(True, 10)
