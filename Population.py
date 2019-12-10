@@ -119,20 +119,20 @@ class Population:
 
             # Evaluate them:
             i.evaluate()
-            
-    def mu_modularity(self, network_num):
-        within = 0
-        for c in self.population[network_num].communities:
-            idx = 0
-            s_comm = set(c)
-            for i in c:
-                n_edges = self.population[network_num].adjL[c[idx]]
-                comm_i = s_comm.intersection(n_edges)
-                within += len(comm_i)
-                idx += 1
-        num_edges = sum(map(len, self.population[network_num].adjL.values()))
-        outside = num_edges-within
-        return (outside/num_edges)
+
+    def find_modularity(self):
+        """
+        Population wide wrapper for the mu-modularity network function.
+
+        Parameters:
+            None
+
+        Returns:
+            None
+        """
+
+        for i in self.population:
+            i.mu_modularity()
 
 ### HELPER FUNCTIONS
 

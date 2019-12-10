@@ -57,6 +57,8 @@ def hillclimb(parents, tstep, save):
 
         # Find initial fitnesses,
         parents.evaluate()
+        parents.find_modularity()
+
         
         while (tstep > 0):
 
@@ -64,6 +66,7 @@ def hillclimb(parents, tstep, save):
             children = copy.deepcopy(parents)
             children.mutate()
             children.evaluate()
+            children.find_modularity()
 
             # Replace parent with children if superior:
             for i in range(len(parents.population)):
@@ -76,19 +79,15 @@ def hillclimb(parents, tstep, save):
                 # Increase age by 1
                 parents.population[i].age += 1
 
-            parents.population.sort(key=lambda x: x.fitness, reverse=True)
-
-            # Print some stats:
-            avg_fit = np.average([i.fitness 
-                for i in parents.population])
-
-            print("--- Timestep:", tstep, "|", "Avg Fit:", 
-                round(avg_fit, 8), "|", "---", end='\r')
+            avg_fit = np.average([i.fitness for i in parents.population])
+            avg_mod = np.average([i.modularity for i in parents.population])
+            print("--- tstep:", tstep, "|", "avg fit", round(avg_fit, 4), "|",
+            "avg modu:", round(avg_mod,4), "---", end='\r')
 
             # Decrement
             tstep -= 1
 
-def genetic(parents, tstep, save):
+def genetic(parents, tstep, style, save):
     """
     Performs evolution on a population of robots using a genetic algorithm.
 
@@ -109,6 +108,7 @@ def genetic(parents, tstep, save):
     Parameters:
         :population parents:        The parent population being evolved.
         :int tstep:                 The number of timesteps to evolve for.
+        :str style:                 Style of genetic evolution.
         :bool save:                 Whether or not a sum of the run is saved.
 
     Returns:
@@ -116,59 +116,94 @@ def genetic(parents, tstep, save):
     """
 
     # Generate rank weights (+1 because range is used)
-    ranks = ranked(2, len(parents.population) + 1)
+    if (style == "ranked"):
+        ranks_a = ranked(2, len(parents.population) + 1)
 
-    mu_modularity = parents.mu_modularity(network_num = 0) #evaluates modularity of a representative inidivual (0)
-    print(mu_modularity)
-    
-    while (tstep > 0):
+        while (tstep > 0):
+            parents.evaluate()
+            parents.find_modularity()
 
-        # Rank parents, find probs:
-        parents.evaluate()
+            ### Print some stats:
+            avg_fit = np.average([i.fitness for i in parents.population])
+            avg_mod = np.average([i.modularity for i in parents.population])
+            print("--- tstep:", tstep, "|", "avg fit", round(avg_fit, 4), "|",
+            "avg modu:", round(avg_mod,4), "---", end='\r')
 
-        # Print some stats:
-        avg_fit = np.average([x.fitness for x in parents.population])
+            # Select offspring
+            offspring = list(np.random.choice(
+                a = parents.population,
+                p = ranks_a,
+                replace = True,
+                size = len(parents.population)))
 
-        print("--- Timestep:", tstep, "|", "Avg Fit:", 
-                round(avg_fit, 8), "|", "---", end='\r')
+            # Replace with copies to prevent redundant mutation:
+            offspring = [copy.deepcopy(x) for x in offspring]
 
-        parents.population.sort(key=lambda x: x.fitness)
-        kiddos = np.random.choice(
-            a = parents.population, 
-            p = ranks, 
-            replace = True,
-            size = len(parents.population))
+            # Mutate offspring
+            for i in offspring:
+                i.mutate() 
+                i.evaluate()
 
-        # Must be distinct memory places or else mutation will occur on same 
-        # network multiple times.
-        kiddos = [copy.deepcopy(x) for x in kiddos]
+            # Find best of mutated original individuals
+            pool = offspring + parents.population 
+            pool.sort(key=lambda x: x.fitness, reverse = True)
 
-        parents.population = kiddos
-        parents.mutate()
+            # Select best:
+            parents.population = pool[0: len(parents.population)]
 
-        # Decrement
-        tstep -= 1
-    
-    idx = 0
-    pop_mod = []
-    for parent in parents.population:
-        mu_modularity = parents.mu_modularity(network_num = idx) #evaluates modularity of inidivual 0
-        pop_mod.append(mu_modularity)
-        idx += 1
-    print(np.mean(pop_mod))
+            tstep -= 1
+
+    elif (style == "tournament"):
+        while (tstep > 0):
+            parents.evaluate()
+            parents.find_modularity()
+
+            ### Print some stats:
+            avg_fit = np.average([i.fitness for i in parents.population])
+            avg_mod = np.average([i.modularity for i in parents.population])
+            print("--- tstep:", tstep, "|", "avg fit", round(avg_fit, 4), "|",
+            "avg modu:", round(avg_mod,4), "---", end='\r')
+
+
+            parents.population.sort(key=lambda x: x.fitness)
+            children = copy.deepcopy(parents)
+
+            # Preserve best of this generation: elitism
+            offspring = [parents.population[-1]]
+            print("Best", offspring[0].fitness)
+            print("Rest", [i.fitness for i in parents.population])
+            for i in range(len(parents.population) - 1):
+
+                # Tournament selection: Take best of 5 (tunable)
+                sample = list(np.random.choice(a = parents.population, replace = True, size = 5))
+                sample.sort(key= lambda x: x.fitness)
+
+                # Find best of tournament and mutate.
+                best = copy.deepcopy(sample[-1])
+                best.mutate()
+                offspring.append(best)
+
+            for i in offspring:
+                i.evaluate()
+
+            children.population = offspring 
+            parents = children
+
+            tstep -= 1
 
 ### Driver and examples
 
 kwargs = {'ID':0,
         'com_side':3, 
         'coms_per_side':3, 
-        'threshold':140, 
-        'fireweight':20, 
+        'threshold':4, 
+        'fireweight':1, 
         'stype':'gaussian', 
-        'popsize': 100, 
+        'popsize': 5, 
         'net_type':'gaussian_com', 
         'locality':0.25}
 
 parents = Population(**kwargs)
 parents.initialize()
-genetic(parents, 10000, False)
+hillclimb(parents, 1000, False)
+print("\n")

@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 
 from scipy.stats import norm
 import matplotlib.pyplot as plt 
+import matplotlib.animation as animation 
 
 class Network(ABC):
     """
@@ -154,6 +155,11 @@ class Network(ABC):
         self.fireworthy = np.tile(False, self.N ** 2)
         self.fireworthy[to_fire] = True
 
+        # Construct frame
+        # idx = [node_to_idx for i in to_fire]
+        # frame = np.zeros(self.N, self.N)
+        # frame[idx] == 1
+
 
     def show_grid(self, labels, size):
         """
@@ -192,7 +198,6 @@ class Network(ABC):
         plt.figure(figsize=(16, 16))
         nx.draw(g, with_labels= labels, pos=pos, node_size=size)
         plt.show()
-
 
 ### MAIN NETWORKING CLASSES
 
@@ -332,6 +337,7 @@ class GaussianCommunity(Network):
         self.astates = np.zeros(self.N ** 2)
         self.fireworthy = np.tile(False, self.N ** 2)
         self.communities = make_communities(com_side, coms_per_side)
+        self.modularity = 0
 
         # Evolutionary params
         self.ID = ID
@@ -407,38 +413,60 @@ class GaussianCommunity(Network):
 
     def evaluate(self):
         
-        # Start with spiking all nodes in a community.
-        self.comspike()
-        self.update_states()
+        # For EACH possible community spiking:
+        fits = []
 
-        # Find initial firing nodes, firing communities
-        # Communities start at 1 because of spike.
-        comcount = 1
-        total_fires = np.where(self.fireworthy == True)
-
-        iters = 49
-        while(iters != 0 and True in self.fireworthy):
-            self.fire()
+        for i in range(self.coms_per_side ** 2):
+            # Start with spiking all nodes in a community.
+            self.comspike(i)
             self.update_states()
 
-            firing = np.array(np.where(self.fireworthy == True)).flatten()
+            # Find initial firing nodes, firing communities
+            # Communities start at 1 because of spike.
+            comcount = 1
+            total_fires = np.where(self.fireworthy == True)
 
-            total_fires = np.append(total_fires, firing)
+            iters = 49
+            while(iters != 0 and True in self.fireworthy):
+                self.fire()
+                self.update_states()
 
-            for i in self.communities:
-                if (set(i).issubset(set(firing))):
-                    comcount += 1
+                firing = np.array(np.where(self.fireworthy == True)).flatten()
 
-            iters -= 1
+                total_fires = np.append(total_fires, firing)
 
-        # Calculate fitness based on proportion of total firing nodes & coms
-        prop_fired = len(total_fires) / (self.N ** 2 * 50)
+                for i in self.communities:
+                    if (set(i).issubset(set(firing))):
+                        comcount += 1
 
-        # Calculate fitness based on proportion of total community firings.
-        com_prop = comcount / ((self.coms_per_side ** 2) * 50)
+                iters -= 1
 
-        # self.fitness = np.average(prop_fired) + comm_fired
-        self.fitness = np.average([prop_fired, com_prop])
+            # Calculate fitness based on proportion of total firing nodes & coms
+            prop_fired = len(total_fires) / (self.N ** 2 * 50)
+
+            # Calculate fitness based on proportion of total community firings.
+            com_prop = comcount / ((self.coms_per_side ** 2) * 50)
+
+            # self.fitness = np.average(prop_fired) + comm_fired
+            fits.append(sum([prop_fired, 9 * com_prop]))
+
+        self.fitness = np.average(fits)
+
+    def mu_modularity(self):
+        within = 0
+        for c in self.communities:
+            idx = 0
+            s_comm = set(c)
+            for i in c:
+                n_edges = self.adjL[c[idx]]
+                comm_i = s_comm.intersection(n_edges)
+                within += len(comm_i)
+                idx += 1
+        num_edges = sum(map(len, self.adjL.values()))
+        outside = num_edges-within
+
+        self.modularity = (outside/num_edges)
+
 
 class StrictCommunity(Network):
 
@@ -476,6 +504,7 @@ class StrictCommunity(Network):
         self.astates = np.zeros(self.N ** 2)
         self.fireworthy = np.tile(False, self.N ** 2)
         self.communities = make_communities(com_side, coms_per_side)
+        self.modularity = 0
 
         # Evolutionary params
         self.ID = ID
@@ -550,38 +579,59 @@ class StrictCommunity(Network):
 
     def evaluate(self):
         
-        # Start with spiking all nodes in a community.
-        self.comspike()
-        self.update_states()
+        # For EACH possible community spiking:
+        fits = []
 
-        # Find initial firing nodes, firing communities
-        # Communities start at 1 because of spike.
-        comcount = 1
-        total_fires = np.where(self.fireworthy == True)
-
-        iters = 49
-        while(iters != 0 and True in self.fireworthy):
-            self.fire()
+        for i in range(self.coms_per_side ** 2):
+            # Start with spiking all nodes in a community.
+            self.comspike(i)
             self.update_states()
 
-            firing = np.array(np.where(self.fireworthy == True)).flatten()
+            # Find initial firing nodes, firing communities
+            # Communities start at 1 because of spike.
+            comcount = 1
+            total_fires = np.where(self.fireworthy == True)
 
-            total_fires = np.append(total_fires, firing)
+            iters = 49
+            while(iters != 0 and True in self.fireworthy):
+                self.fire()
+                self.update_states()
 
-            for i in self.communities:
-                if (set(i).issubset(set(firing))):
-                    comcount += 1
+                firing = np.array(np.where(self.fireworthy == True)).flatten()
 
-            iters -= 1
+                total_fires = np.append(total_fires, firing)
 
-        # Calculate fitness based on proportion of total firing nodes & coms
-        prop_fired = len(total_fires) / (self.N ** 2 * 50)
+                for i in self.communities:
+                    if (set(i).issubset(set(firing))):
+                        comcount += 1
 
-        # Calculate fitness based on proportion of total community firings.
-        com_prop = comcount / ((self.coms_per_side ** 2) * 50)
+                iters -= 1
 
-        # self.fitness = np.average(prop_fired) + comm_fired
-        self.fitness = np.average([prop_fired, com_prop])
+            # Calculate fitness based on proportion of total firing nodes & coms
+            prop_fired = len(total_fires) / (self.N ** 2 * 50)
+
+            # Calculate fitness based on proportion of total community firings.
+            com_prop = comcount / ((self.coms_per_side ** 2) * 50)
+
+            # self.fitness = np.average(prop_fired) + comm_fired
+            fits.append(sum([prop_fired, 9 * com_prop]))
+
+        self.fitness = np.average(fits)
+
+    def mu_modularity(self):
+        within = 0
+        for c in self.communities:
+            idx = 0
+            s_comm = set(c)
+            for i in c:
+                n_edges = self.adjL[c[idx]]
+                comm_i = s_comm.intersection(n_edges)
+                within += len(comm_i)
+                idx += 1
+        num_edges = sum(map(len, self.adjL.values()))
+        outside = num_edges-within
+
+        self.modularity = (outside/num_edges)
 
 ### HELPER FUNCTIONS ###
 
@@ -707,3 +757,12 @@ def compute_gaussian_weights(W,node,adjL):
 
     gauss = gauss / gauss.sum() # normalize everything to make sure we have probabilities
     return gauss.flatten() # flatten them to use with np.random.choice
+
+def render(ims):
+    fig = plt.figure()
+    frames = [[plt.imshow(im, animated=True)] for im in ims]
+    plt.close()
+    
+    ani = animation.ArtistAnimation(fig, frames, interval=50, blit=True,
+                                    repeat_delay=1000)
+    return ani
