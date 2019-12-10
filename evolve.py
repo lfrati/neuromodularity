@@ -4,6 +4,7 @@ This file performs a very simple hillclimb evolution of growing networks.
 
 import copy
 import time
+import random
 import pickle
 import numpy as np 
 import pandas as pd 
@@ -16,6 +17,26 @@ import networkx as nx
 
 
 from Population import Population
+
+### HELPER FUNCTIONS
+
+def ranked(s, mu): 
+    """
+    Generates a fitness proportionate selection matrix.
+    
+    Parameters:
+        :int s:         Number of expected children from 
+        :int mu:        The population size
+    """
+
+    ranks = [] 
+    for i in range(1, mu): 
+        term1 = (2 - s) / mu  
+        term2a = (2 * i * (2-1)) 
+        term2b = (mu * ( mu - 1)) 
+        term2 = term2a / term2b  
+        ranks.append(term1 + term2) 
+    return ranks
 
 def hillclimb(parents, tstep, save):
         """
@@ -33,10 +54,6 @@ def hillclimb(parents, tstep, save):
         Returns:
             None
         """
-
-        # Create database
-        db = pd.DataFrame(columns = ["N", "Dist", "Locality", 
-            "Adjlist", "Threshold", "Comshape"])
 
         # Find initial fitnesses,
         parents.evaluate()
@@ -61,35 +78,15 @@ def hillclimb(parents, tstep, save):
 
             parents.population.sort(key=lambda x: x.fitness, reverse=True)
 
-            # Save best performing at that timestep.
-            # db = db.append({
-            #     "N":parents.population[0].N,
-            #     "Dist":parents.population[0].dist,
-            #     "Locality":parents.population[0].locality,
-            #     "Adjlist":parents.population[0].adjL,
-            #     "Threhold":parents.population[0].threshold,
-            #     "Comshape":parents.population[0].comshape
-            #     }, ignore_index=True)
-
             # Print some stats:
             avg_fit = np.average([i.fitness 
                 for i in parents.population])
 
-            avg_mut = 0
-            # avg_mut = np.average([i.muts 
-            #     for i in parents.population])
-
             print("--- Timestep:", tstep, "|", "Avg Fit:", 
-                avg_fit, "|", "Avg Mut:", avg_mut, "---", end='\r')
+                round(avg_fit, 8), "|", "---", end='\r')
 
             # Decrement
             tstep -= 1
-
-        # Save database
-        if (save):
-            timestr = time.strftime("%Y-%m-%d_%H%M%S")
-            with open('run' + timestr + ".pkl", 'wb') as fout:
-                pickle.dump(db, fout)
 
 def genetic(parents, tstep, save):
     """
@@ -118,81 +115,36 @@ def genetic(parents, tstep, save):
         None
     """
 
-    # Create database
-    db = pd.DataFrame(columns = ["N", "Dist", "Locality", 
-        "Adjlist", "Threshold", "Comshape"])
-
-    # Find initial fitnesses,
-    parents.evaluate()
-    
-    # Find modularity of initial parent
-    adj_for_mod = parents.population[0].adjL
-    G=nx.DiGraph(adj_for_mod)
-    comm_dict = partition(G)
-    print(get_modularity(G, comm_dict))
+    # Generate rank weights (+1 because range is used)
+    ranks = ranked(2, len(parents.population) + 1)
 
     while (tstep > 0):
 
         # Rank parents, find probs:
-        parents.population.sort(key=lambda x: x.fitness, reverse=True)
-
-        # # Save best performing at that timestep.
-        # db = db.append({
-        #     "N":parents.population[0].N,
-        #     "Dist":parents.population[0].dist,
-        #     "Locality":parents.population[0].locality,
-        #     "Adjlist":parents.population[0].adjL,
-        #     "Threhold":parents.population[0].threshold,
-        #     "Comshape":parents.population[0].comshape
-        #     }, ignore_index=True)
-
-        # Find rank-prop probabilities
-        
-        ### TODO: Find a way to easily implement rank based selection
-
-        print(probs)
-        print(sum(probs))
-
-        # Create dummy population, replace its individuals with fitness prop
-        children = copy.deepcopy(parents)
-        survive = np.random.choice(children.population, 
-            len(children.population), p = probs, replace = True)
-
-        for i in range(len(children.population)):
-            children.population[i] = survive[i]
-
-        # Mutate them all
-        children.mutate()
-
-        # Replace parents with children
-        parents = children
+        parents.evaluate()
 
         # Print some stats:
-        avg_fit = np.average([i.fitness 
-            for i in parents.population])
-
-        avg_mut = 0
-        # avg_mut = np.average([i.muts 
-        #     for i in parents.population])
+        avg_fit = np.average([x.fitness for x in parents.population])
 
         print("--- Timestep:", tstep, "|", "Avg Fit:", 
-            avg_fit, "|", "Avg Mut:", avg_mut, "---")
+                round(avg_fit, 8), "|", "---", end='\r')
+
+        parents.population.sort(key=lambda x: x.fitness)
+        kiddos = np.random.choice(
+            a = parents.population, 
+            p = ranks, 
+            replace = True,
+            size = len(parents.population))
+
+        # Must be distinct memory places or else mutation will occur on same 
+        # network multiple times.
+        kiddos = [copy.deepcopy(x) for x in kiddos]
+
+        parents.population = kiddos
+        parents.mutate()
 
         # Decrement
         tstep -= 1
-
-    # Find modularity of last parent
-    adj_for_mod = parents.population[0].adjL
-    G=nx.DiGraph(adj_for_mod)
-    comm_dict = partition(G)
-    print(get_modularity(G, comm_dict))
-
-    # Save database
-    if (save):
-        timestr = time.strftime("%Y-%m-%d_%H%M%S")
-        with open('run' + timestr + ".pkl", 'wb') as fout:
-            pickle.dump(db, fout)
-
 
 ### Driver and examples
 
@@ -202,12 +154,10 @@ kwargs = {'ID':0,
         'threshold':140, 
         'fireweight':20, 
         'stype':'gaussian', 
-        'popsize':10, 
-        'net_type':'strict_com', 
+        'popsize': 100, 
+        'net_type':'gaussian_com', 
         'locality':0.25}
 
 parents = Population(**kwargs)
 parents.initialize()
-
-hillclimb(parents, 1000, False)
-parents.population[0].show_grid(True, 10)
+genetic(parents, 10000, False)
