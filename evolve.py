@@ -118,6 +118,9 @@ def genetic(parents, tstep, save):
     # Generate rank weights (+1 because range is used)
     ranks = ranked(2, len(parents.population) + 1)
 
+    mu_modularity = parents.mu_modularity(network_num = 0) #evaluates modularity of a representative inidivual (0)
+    print(mu_modularity)
+    
     while (tstep > 0):
 
         # Rank parents, find probs:
@@ -145,6 +148,14 @@ def genetic(parents, tstep, save):
 
         # Decrement
         tstep -= 1
+    
+    idx = 0
+    pop_mod = []
+    for parent in parents.population:
+        mu_modularity = parents.mu_modularity(network_num = idx) #evaluates modularity of inidivual 0
+        pop_mod.append(mu_modularity)
+        idx += 1
+    print(np.mean(pop_mod))
 
 ### Driver and examples
 
