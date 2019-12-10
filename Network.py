@@ -380,9 +380,10 @@ class GaussianCommunity(Network):
             while (len(self.adjL[node]) == 0):
                 node = random.randrange(self.N ** 2)
 
-        # Delete random edge from adjL for that node.
-        self.adjL[node].discard(np.random.choice(self.adjL[node], 1)[0])
-        self.add_edge(node, 1)
+        out_node_old = random.sample(self.adjL[node],1)
+        self.add_edges(node, 1)
+
+        self.adjL[node].discard(out_node_old[0])
 
     def initialize(self):
         """
@@ -522,9 +523,10 @@ class StrictCommunity(Network):
             while (len(self.adjL[node]) == 0):
                 node = random.randrange(self.N ** 2)
 
-        # Delete random edge from adjL for that node.
-        self.adjL[node].discard(np.random.choice(self.adjL[node], 1)[0])
-        self.add_edge(node, 1)
+        out_node_old = random.sample(self.adjL[node],1)
+        self.add_edges(node, 1)
+
+        self.adjL[node].discard(out_node_old[0])
 
     def initialize(self):
         """
@@ -692,7 +694,7 @@ def get_subset(W, node,N):
     subset = W[N-i:N-i+N,N-j:N-j+N] # extract a subset of the master_weights
     return np.copy(subset) # make a copy to make sure subsequent manipulations don't affect the master
 
-def compute_gaussian_weights(W,node,adjL, blacklist):
+def compute_gaussian_weights(W,node,adjL):
     tmp,N = W.shape
     tmp,N = tmp//2, N//2 # recover side-len from the weigths matrix, yeah, I did't want to have an extra parameter going around
     assert tmp == N, f"Weights have not the expected shape: Expected ({N},{N}), got ({tmp},{N})"
