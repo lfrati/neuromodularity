@@ -38,56 +38,74 @@ def ranked(s, mu):
         ranks.append(term1 + term2) 
     return ranks
 
-def hillclimb(parents, tstep, save):
-        """
-        Perform an evolutionary run on an initial population using a hill-climb
-        algorithm.
+### EVOLUTIONARY FUNCTIONS
 
-        Each parent is compared to its child. If the child is superior, it
-        replaces the parent.
+def hillclimb(parents, tstep):
+    """
+    Perform an evolutionary run on an initial population using a hill-climb
+    algorithm.
 
-        Parameters:
-            :population parents: 		Initial population of parent networks.
-            :int tsteps: 				Generations to evolve through.
-            :bool save: 				Saves a dataframe of run if True.
+    Each parent is compared to its child. If the child is superior, it
+    replaces the parent.
 
-        Returns:
-            None
-        """
+    Parameters:
+        :population parents:        Initial population of parent networks.
+        :int tsteps:                Generations to evolve through.
 
-        # Find initial fitnesses,
-        parents.evaluate()
-        parents.find_modularity()
+    Returns:
+        None
+    """
 
-        
-        while (tstep > 0):
+    stats = {x:[] for x in ['avg_fit', 'avg_mod', 'best_fit', 'best_mod', 'best_net_adj',
+    'best_net_astates']}
 
-            # Create mutant population by copying and mutating.
-            children = copy.deepcopy(parents)
-            children.mutate()
-            children.evaluate()
-            children.find_modularity()
+    # Find initial fitnesses,
+    parents.evaluate()
+    parents.find_modularity()
 
-            # Replace parent with children if superior:
-            for i in range(len(parents.population)):
+    
+    while (tstep > 0):
 
-                #also replaces parent when fitness is the same
-                if (parents.population[i].fitness <= 
-                    children.population[i].fitness): 
-                    parents.population[i] = children.population[i]
+        # Create mutant population by copying and mutating.
+        children = copy.deepcopy(parents)
+        children.mutate()
+        children.evaluate()
+        children.find_modularity()
 
-                # Increase age by 1
-                parents.population[i].age += 1
+        # Replace parent with children if superior:
+        for i in range(len(parents.population)):
 
-            avg_fit = np.average([i.fitness for i in parents.population])
-            avg_mod = np.average([i.modularity for i in parents.population])
-            print("--- tstep:", tstep, "|", "avg fit", round(avg_fit, 4), "|",
-            "avg modu:", round(avg_mod,4), "---", end='\r')
+            #also replaces parent when fitness is the same
+            if (parents.population[i].fitness <= 
+                children.population[i].fitness): 
+                parents.population[i] = children.population[i]
 
-            # Decrement
-            tstep -= 1
+            # Increase age by 1
+            parents.population[i].age += 1
 
-def genetic(parents, tstep, style, save):
+        parents.population.sort(key=lambda x: x.fitness)
+
+        avg_fit = np.average([i.fitness for i in parents.population])
+        avg_mod = np.average([i.modularity for i in parents.population])
+
+        stats['avg_fit'].append(avg_fit)
+        stats['avg_mod'].append(avg_mod)
+
+        stats['best_fit'].append(parents.population[-1].fitness)
+        stats['best_mod'].append(parents.population[-1].modularity)
+
+        stats['best_adj'].append(parents.population[-1].adjL)
+        stats['best_net_astates'].append(parents.population[-1].astates)
+
+        print("--- tstep:", tstep, "|", "avg fit", round(avg_fit, 4), "|",
+        "avg modu:", round(avg_mod,4), "---", end='\r')
+
+        # Decrement
+        tstep -= 1
+
+    return stats
+
+def genetic(parents, tstep, style):
     """
     Performs evolution on a population of robots using a genetic algorithm.
 
@@ -109,12 +127,14 @@ def genetic(parents, tstep, style, save):
         :population parents:        The parent population being evolved.
         :int tstep:                 The number of timesteps to evolve for.
         :str style:                 Style of genetic evolution.
-        :bool save:                 Whether or not a sum of the run is saved.
 
     Returns:
         None
     """
 
+    stats = {x:[] for x in ['avg_fit', 'avg_mod', 'best_fit', 'best_mod', 'best_net_adj',
+        'best_net_astates']}
+        
     # Generate rank weights (+1 because range is used)
     if (style == "ranked"):
         ranks_a = ranked(2, len(parents.population) + 1)
@@ -122,10 +142,21 @@ def genetic(parents, tstep, style, save):
         while (tstep > 0):
             parents.evaluate()
             parents.find_modularity()
+            parents.population.sort(key=lambda x: x.fitness)
 
             ### Print some stats:
             avg_fit = np.average([i.fitness for i in parents.population])
             avg_mod = np.average([i.modularity for i in parents.population])
+
+            stats['avg_fit'].append(avg_fit)
+            stats['avg_mod'].append(avg_mod)
+
+            stats['best_fit'].append(parents.population[-1].fitness)
+            stats['best_mod'].append(parents.population[-1].modularity)
+
+            stats['best_net_adj'].append(parents.population[-1].adjL)
+            stats['best_net_astates'].append(parents.population[-1].astates)
+
             print("--- tstep:", tstep, "|", "avg fit", round(avg_fit, 4), "|",
             "avg modu:", round(avg_mod,4), "---", end='\r')
 
@@ -161,6 +192,16 @@ def genetic(parents, tstep, style, save):
             ### Print some stats:
             avg_fit = np.average([i.fitness for i in parents.population])
             avg_mod = np.average([i.modularity for i in parents.population])
+
+            stats['avg_fit'].append(avg_fit)
+            stats['avg_mod'].append(avg_mod)
+
+            stats['best_fit'].append(parents.population[-1].fitness)
+            stats['best_mod'].append(parents.population[-1].modularity)
+
+            stats['best_net_adj'].append(parents.population[-1].adjL)
+            stats['best_net_astates'].append(parents.population[-1].astates)
+
             print("--- tstep:", tstep, "|", "avg fit", round(avg_fit, 4), "|",
             "avg modu:", round(avg_mod,4), "---", end='\r')
 
@@ -170,8 +211,6 @@ def genetic(parents, tstep, style, save):
 
             # Preserve best of this generation: elitism
             offspring = [parents.population[-1]]
-            print("Best", offspring[0].fitness)
-            print("Rest", [i.fitness for i in parents.population])
             for i in range(len(parents.population) - 1):
 
                 # Tournament selection: Take best of 5 (tunable)
@@ -191,6 +230,8 @@ def genetic(parents, tstep, style, save):
 
             tstep -= 1
 
+    return stats 
+
 ### Driver and examples
 
 kwargs = {'ID':0,
@@ -203,7 +244,6 @@ kwargs = {'ID':0,
         'net_type':'gaussian_com', 
         'locality':0.25}
 
-parents = Population(**kwargs)
-parents.initialize()
-hillclimb(parents, 1000, False)
-print("\n")
+# parents = Population(**kwargs)
+# parents.initialize()
+# stats = hillclimb(parents, 1000, False)

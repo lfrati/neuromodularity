@@ -201,7 +201,6 @@ class Network(ABC):
 
 ### MAIN NETWORKING CLASSES
 
-
 class NoCommunity(Network):
     """
     Creates a network without any community structure.
