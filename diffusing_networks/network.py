@@ -1,10 +1,11 @@
-from utils import make_communities, make_master_weights, compute_gaussian_weights, make_layout, id_to_coords
+from utils import make_communities, make_master_weights, compute_gaussian_weights, make_layout, id_to_coords, unzip
 from node import Node
 import numpy as np
 import random
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import networkx as nx
+from collections import namedtuple
 
 
 class Network:
@@ -31,6 +32,12 @@ class Network:
         # list of nodes IDS i.e. [0,1,2,3,...,N*N]
         self.nodeIDs = np.arange(self.numNodes)
         self.threshold = threshold
+
+        # coordinates of each community
+        self.comm_coords = [[id_to_coords(node, self.N) for node in community] for community in self.communityIDs]
+        # community masks to be used with numpy advanced indexing
+        self.comm_masks = [tuple(unzip(coords)) for coords in self.comm_coords]
+        self.num_communities = len(self.communityIDs)
 
         # TO BE INITIALIZED
         # list of the actual Nodes
@@ -147,6 +154,36 @@ class Network:
         # select community and spark it's nodes
         community = random.choice(self.communities)
         [node.spark() for node in community]
+    
+    def episode(self):
+        it = 0
+        Results = namedtuple("Results","steps avg_spikes mu communities_activated")
+        for community in self.communities:
+            # reset all nodes' activity to zero, shut off spiking neurons
+            [node.reset() for node in self.nodes]
+            # select community and spark it's nodes
+            [node.spark() for node in community]
+
+            for _ in range(len(self.communities)):
+                it += 1
+                self.check()
+                self.gossip(sample=False)
+                self.update()
+                if self.dead():
+                    break
+            self.optimize()
+
+        episode = np.array(self.spiking_history[-it:])
+        avg_spikes = episode.sum() / episode.size
+        mu = self.mu()
+        communities_activated = sum(sum(board[mask].sum() == self.comm_size for mask in self.comm_masks) for board in episode)
+        communities_activated -= self.num_communities
+        return Results(it, avg_spikes, mu, communities_activated)
+
+    def activated_comms(self):
+        pass
+
+
 
     def check(self):
         # Check which nodes will spike.
